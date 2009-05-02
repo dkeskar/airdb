@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:WindowedApplication xmlns:mx="http://www.adobe.com/2006/mxml" layout="absolute" initialize="exInit();">
+	<mx:Script>
+		<![CDATA[
+			import mx.core.Application;
+			import com.memamsa.airdb.DB;
+			import example.Comment;
+			import example.Post;
+			
+			public function exInit():void {
+				DB.initDB('example.db');
+				
+				var post:Post = new Post();
+				var cmt:Comment = new Comment();
+				post.create({title: 'My first post', author: 'cooldude'});
+				cmt.data({author: 'cooldude', title: '1st'});
+				post.comments.push(cmt);
+				
+				trace('Post: ' + post['id'] + ' titled ' + post['title']); 
+				trace('# Comments: ' + post.comments.list().length);
+				
+				var results:Array; 
+				results = post.comments.findAll({conditions: "author like '%cool%'", order: 'created_at ASC'});
+				trace('Found: ' + results.length);
+			}
+		]]>
+	</mx:Script>
+	<mx:Label text="AirDB Example" color="#0728D1" fontSize="22" fontWeight="bold" fontFamily="Helvetica" />
+	<!-- Add some controls here to showcase and see data -->	
+</mx:WindowedApplication>

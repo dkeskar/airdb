@@ -1,0 +1,11 @@
+ActionScript ORM for AIR apps. 
+Supports ActiveRecord style models, migrations and associations. 
+
+NOTE: It works, mostly. As of today, this project lacks many things: 
+1) Tests
+2) Library packaging
+3) Documentation
+
+I will post design and development updates here: 
+http://blog.memamsa.com/category/airdb
+
