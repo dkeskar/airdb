@@ -1,2 +1,7 @@
 bin-debug
 bin-debug/*
+.actionScriptProperties
+.flexProperties
+.project
+.settings
+.settings/*
