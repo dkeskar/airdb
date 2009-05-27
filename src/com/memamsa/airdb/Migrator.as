@@ -14,6 +14,7 @@ package com.memamsa.airdb
 		private var mFieldSet:Array = null;
 		private var stmt:SQLStatement = null;
 		private var dbConn:SQLConnection = null;
+		private var createCalled:Boolean = false;
 
 		public function Migrator(klass:Class, options:Object, directives:Array)
 		{
@@ -88,14 +89,21 @@ package com.memamsa.airdb
 		
 		// For use within a block call argument to createTable
 		public function column(name:String, dataType:uint, options:Object = null):void {
-			mFieldSet.push([name, dataType, options]);
+		  if (!createCalled) {
+		    mFieldSet.push([name, dataType, options]);  
+		  } else {
+		    addColumn(name, dataType, options);
+		  }			
 		}
 		
-		public static function addColumn(name:String, dataType:uint, options:Object):void {
-			// ALTER TABLE ADD COLUMN
+		public function addColumn(name:String, dataType:uint, options:Object):void {
+			stmt.text = "ALTER TABLE " + mStoreName + " ADD COLUMN " + 
+			  DB.fieldMap([name, dataType, options]);
+			trace('addColumn: ' + stmt.text);
+			stmt.execute();
 		}	
 			
-		public static function removeColumn(name:String):void {
+		public function removeColumn(name:String):void {
 			// ALTER TABLE REMOVE COLUMN 
 		} 
 		
@@ -116,6 +124,7 @@ package com.memamsa.airdb
 				" (" + defs.join(',') + ")";
 			
 			stmt.execute();
+			createCalled = true;
 		}
 		
 		public function joinTable(klass:Class):void {
@@ -127,6 +136,11 @@ package com.memamsa.airdb
 			stmt.text = "CREATE TABLE IF NOT EXISTS " + jtName + 
 				" (" + defs.join(',') + ")"; 
 			stmt.execute();	
+		}
+		
+		public function belongsTo(klass:Class):void {
+		  var bfName:String = DB.mapForeignKey(klass);
+		  column(bfName, DB.Field.Integer);
 		}
 	
 	}

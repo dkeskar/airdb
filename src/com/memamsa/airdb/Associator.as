@@ -1,6 +1,7 @@
 package com.memamsa.airdb
 {
 	import flash.data.SQLStatement;
+	import flash.data.SQLResult;	
 	import flash.errors.SQLError;
 	
 	/**
@@ -74,6 +75,8 @@ package com.memamsa.airdb
 			if (myType == DB.Has.AndBelongsToMany) {
 				var query:Object = construct_query(query);
 				return myTarget.findAll(query);
+			} else if (myType == DB.Has.Many) {
+			  return myTarget.findAll({conditions: sourceForeignKey + '=' + mySource['id']});
 			}
 			return [];
 		}
@@ -81,41 +84,77 @@ package com.memamsa.airdb
 		// add specified object(s) to the associated set of objects
 		// The object to be added can be specified either by its primary id
 		// or by providing the actual Modeler sub-class object
-		public function push(obj:*):Boolean {
-			if (myType == DB.Has.AndBelongsToMany) {
-			  var targetId:int = 0;
-				if (obj is Modeler) {
-				  if (obj.className != myTarget.className) return false;
-				  if (obj.unsaved) obj.save();
-				  if (!obj['id']) {
-				    trace('Associator.' + targetStoreName + '.push: target has no ID');
-				    throw "UnknownID";
-				  }
-				  targetId = obj['id'];
-				} 
-				if (obj is Number) {
-				  targetId = obj;
-				}
-				
-				if (mySource.unsaved) mySource.save();
-				if (!mySource['id']) {
-					trace('Associator.' + targetStoreName + '.push: source ID unknown');
-					throw 'Unknown ID';
-				}
-				
-				var stmt:SQLStatement = new SQLStatement();
-				stmt.sqlConnection = DB.getConnection();
-				stmt.text = "INSERT INTO " + joinTable + 
-					' (' + sourceForeignKey + ',' + targetForeignKey + ') VALUES (' + 
-					mySource['id'] + ',' + targetId + ')';
-				try {
-					stmt.execute();
-					return true;
-				} catch(error:SQLError) {
-					trace('ERROR: Associator.push: ' + error.details);
-				}
+		// By default, if an association exists, duplicates are not added. 
+		public function push(obj:*, noDups:Boolean = true):Boolean {
+		  // prepare source and target
+		  var targetId:int = 0;
+		  
+			if (mySource.unsaved) mySource.save();
+			if (!mySource['id']) {
+				trace('Associator.' + targetStoreName + '.push: source ID unknown');
+				throw 'Unknown ID';
 			}
-			return false; 							
+		  
+			if (obj is Modeler) {
+			  if (obj.className != myTarget.className) return false;
+			  // H-M with object specified is taken care of right here.
+		    if (myType == DB.Has.Many && obj[sourceForeignKey] != mySource['id']) {
+		      obj[sourceForeignKey] = mySource['id'];
+		      return obj.save(); 
+		    }			  
+			  if (obj.unsaved) obj.save();
+			  if (!obj['id']) {
+			    trace('Associator.' + targetStoreName + '.push: target has no ID');
+			    throw "UnknownID";
+			  }
+			  targetId = obj['id'];
+			} 
+			if (obj is Number) {
+			  targetId = obj;
+			}			
+			
+			if (myType == DB.Has.AndBelongsToMany) {
+			  return find_or_create(mySource['id'], targetId, noDups);
+			} else if (myType == DB.Has.Many) {
+			  var rc:int = 0;
+			  rc = myTarget.updateAll('id = ' + targetId, sourceForeignKey + ' = ' + mySource['id']);
+			  return (rc == 1) ? true : false;
+			}
+			return false;
+		}
+		
+    // Find or create using SQL statements
+    // Used by various kinds of push associators
+		private function find_or_create(sourceId:int, targetId:int, noDup:Boolean = true) {
+      var stmt:SQLStatement = new SQLStatement();
+      stmt.sqlConnection = DB.getConnection();
+      
+		  if (noDup) {
+		    stmt.text = "SELECT " + targetForeignKey + " FROM " + joinTable + 
+			      " WHERE " + sourceForeignKey + " = " + mySource['id'] + 
+			      " AND " + targetForeignKey + " = " + targetId;
+			  try {
+			    stmt.execute();
+			    var result:SQLResult = stmt.getResult();
+			    if (result && result.data) {
+			      trace('Association already exists and no duplicates.');
+			      return true;
+			    }
+			    trace("Associator.push: Proceeding, noDup and nothing found.");
+			  } catch(error:SQLError) {
+			    trace('ERROR: Associator.push: ' + error.details);
+			  }		    
+		  }
+		  stmt.text = "INSERT INTO " + joinTable + 
+				' (' + sourceForeignKey + ',' + targetForeignKey + ') VALUES (' + 
+				  sourceId + ',' + targetId + ')';
+			try {
+				stmt.execute();
+				return true;
+			} catch(error:SQLError) {
+				trace('ERROR: Associator.push: ' + error.details);
+			}
+			return false;
 		}
 		
 		// remove the specified object from the associated set

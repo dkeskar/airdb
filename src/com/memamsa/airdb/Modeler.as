@@ -294,15 +294,18 @@ package com.memamsa.airdb
 				return associations[name];
 			}
 			
-			var assoc:XMLList = Reflector.getMetadata(this, "Association");
-			if (assoc && assoc.arg.(@key == 'name').@value == name) {
-				var clsName:String = assoc.arg.(@key == 'className').@value;
-				trace('clsName: ' + clsName);
-				var klass:Class = flash.utils.getDefinitionByName(clsName) as Class;
-				var aType:String = assoc.arg.(@key == 'type').@value;
-				associations[name] = new Associator(this, klass, aType);
-				return associations[name]; 
-			}
+			var assocList:XMLList = Reflector.getMetadata(this, "Association");
+			for (var ax:int = 0; ax < assocList.length(); ax++) {
+				var assoc:XML = assocList[ax];
+				if (assoc && assoc.arg.(@key == 'name').@value == name) {
+					var clsName:String = assoc.arg.(@key == 'className').@value;
+					trace('clsName: ' + clsName);
+					var klass:Class = flash.utils.getDefinitionByName(clsName) as Class;
+					var aType:String = assoc.arg.(@key == 'type').@value;
+					associations[name] = new Associator(this, klass, aType);
+					return associations[name]; 
+				}				
+			} 
 			
 			return undefined;
 		}
