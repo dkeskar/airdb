@@ -44,12 +44,14 @@ package com.memamsa.airdb
 			for each (var fname:* in model.prototype.fieldNames) {
 				fieldValues[fname] = null;
 			}
+			// new ModelClass() is for creating new record
+			newRecord = true;
 		}
 		
 		// initialize this object to hold fields for a new record. 
 		public function data(values:Object):void {
-			resetFields();
 			if (!values) return;
+			resetFields();			
 			
 			for (var key:String in values) {
 				if (fieldValues.hasOwnProperty(key)) {
@@ -99,6 +101,7 @@ package com.memamsa.airdb
 				if (result.data.length > 0) {
 					// we trust the DB schema so whole new assignment is ok.
 					fieldValues = result.data[0];
+					newRecord = false;
 					recLoaded = true;
 				}
 			} catch (error:SQLError) {
@@ -200,10 +203,12 @@ package com.memamsa.airdb
 		
 		// update currently loaded/init'd record with new values		
 		public function update(values:Object=null):Boolean {
-			if (!values && !newRecord && !recChanged) return false;
-			if (!values && newRecord) {
-				values = fieldValues;
-			}
+			if (!values && !recChanged) return false;
+			// new records should be "created"
+			if (!values && (newRecord || !fieldValues['id'])) {
+			  throw mStoreName + ".update: Expected create";
+		  }
+
 			var assigns:Array = [];
 			var key:String;
 			var changed:Boolean = recChanged;
@@ -221,7 +226,7 @@ package com.memamsa.airdb
 			}
 			if (changed) {
 				for (key in fieldsChanged) {
-					assigns.push(key + " = " + fieldValues[key]);
+					assigns.push(key + " = " + DB.sqlMap(fieldValues[key]));
 				}
 				stmt.text = "UPDATE " + mStoreName + " SET ";
 				stmt.text += assigns.join(',');

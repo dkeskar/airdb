@@ -14,7 +14,9 @@ package com.memamsa.airdb
 		private var mFieldSet:Array = null;
 		private var stmt:SQLStatement = null;
 		private var dbConn:SQLConnection = null;
-		private var createCalled:Boolean = false;
+		private var mTableSchema:SQLTableSchema = null;
+		private var mAddedColumns:Object = new Object();
+		private var created:Boolean = false;
 
 		public function Migrator(klass:Class, options:Object, directives:Array)
 		{
@@ -22,6 +24,10 @@ package com.memamsa.airdb
 			mOptions = options; 
 			mDirectives = directives;
 			mFieldSet = [];
+
+			stmt = new SQLStatement();
+			dbConn = stmt.sqlConnection = DB.getConnection();
+			
 			if (options && options.hasOwnProperty('id') && options['id']) {
 				column('id', DB.Field.Serial);
 			} 
@@ -31,10 +37,12 @@ package com.memamsa.airdb
 				mStoreName = DB.mapTable(mKlass);
 			}
 			mKlass.prototype.storeName = mStoreName; 
-			
-			stmt = new SQLStatement();
-			dbConn = stmt.sqlConnection = DB.getConnection();						
-			
+			mTableSchema = DB.getTableSchema(mStoreName);
+			if (mTableSchema) {
+				for each (var col:SQLColumnSchema in mTableSchema.columns) {
+					mAddedColumns[col.name] = col;
+				}				
+			}
 			DB.migrate(this);
 			schemate();
 		}
@@ -89,7 +97,7 @@ package com.memamsa.airdb
 		
 		// For use within a block call argument to createTable
 		public function column(name:String, dataType:uint, options:Object = null):void {
-		  if (!createCalled) {
+		  if (!tableCreated) {
 		    mFieldSet.push([name, dataType, options]);  
 		  } else {
 		    addColumn(name, dataType, options);
@@ -97,14 +105,16 @@ package com.memamsa.airdb
 		}
 		
 		public function addColumn(name:String, dataType:uint, options:Object):void {
-			stmt.text = "ALTER TABLE " + mStoreName + " ADD COLUMN " + 
-			  DB.fieldMap([name, dataType, options]);
-			trace('addColumn: ' + stmt.text);
-			stmt.execute();
+			if (!existsColumn(name)) {
+				stmt.text = "ALTER TABLE " + mStoreName + " ADD COLUMN " + 
+				  DB.fieldMap([name, dataType, options]);
+				trace('addColumn: ' + stmt.text);
+				stmt.execute();
+			}
 		}	
 			
 		public function removeColumn(name:String):void {
-			// ALTER TABLE REMOVE COLUMN 
+			// ALTER TABLE REMOVE COLUMN - unsupported in SQLite
 		} 
 		
 		public function columnTimestamps():void {
@@ -113,6 +123,7 @@ package com.memamsa.airdb
 		}
 		
 		public function createTable(block:Function):void {
+			if (tableCreated) return;
 			block.call();
 			
 			var defs:Array = [];
@@ -124,7 +135,7 @@ package com.memamsa.airdb
 				" (" + defs.join(',') + ")";
 			
 			stmt.execute();
-			createCalled = true;
+			created = true;
 		}
 		
 		public function joinTable(klass:Class):void {
@@ -143,5 +154,17 @@ package com.memamsa.airdb
 		  column(bfName, DB.Field.Integer);
 		}
 	
+	  private function get tableCreated():Boolean {
+	  	return (created || mTableSchema);
+	  }
+	  
+	  private function existsColumn(name:String):Boolean {
+	  	return (mAddedColumns[name] ? true : false);
+	  }	
+	  
+	  private function matchesColumn(name:String, dataType:uint, options:Object) {
+	  	// modify column not yet supported.
+	  	return false;
+	  }  
 	}
 }

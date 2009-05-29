@@ -33,19 +33,24 @@ package com.memamsa.airdb
 		// The schema loaded from the DB
 		private static var dbSchema:SQLSchemaResult = null;
 		// Version information for the overall schema
-		private static var schemaVer:SchemaInfo = null;
+		private static var _schemaVer:SchemaInfo = null;
 
 		private static var latestSchema:Boolean = false;
 		
 		// All registered migrations 
 		private static var dbMigrations:Object = {};
 
+    private static function get schemaVer():SchemaInfo {
+      if (!_schemaVer) {
+        _schemaVer = new SchemaInfo();
+      }
+      return _schemaVer;
+    }
+    
 		// initialize database etc. 
 		public static function initDB(dbname:String=null):void {
 			getConnection(dbname);
-			schemaVer = new SchemaInfo();	
 		}
-		
 		
 		// get a connection to the database
 		// Sync only supported
@@ -72,9 +77,9 @@ package com.memamsa.airdb
 		}
 		
 		// get the schema (cached) 
-		public static function getSchema():SQLSchemaResult {
+		public static function getSchema(reloadSchema:Boolean = false):SQLSchemaResult {
 			try {
-				if (!latestSchema) {
+				if (!latestSchema || reloadSchema) {
 					dbConn.loadSchema();
 					dbSchema = dbConn.getSchemaResult();
 					latestSchema = true;					
@@ -85,40 +90,25 @@ package com.memamsa.airdb
 			return dbSchema; 
 		}
 		
-		public static function getTableSchema(name:String):SQLTableSchema {
-			getSchema();
+		public static function getTableSchema(name:String, refresh:Boolean = false):SQLTableSchema {
+			getSchema(refresh);
 			for each (var tbl:SQLTableSchema in dbSchema.tables) {
 				if (tbl.name == name) return tbl;
 			} 
 			return null;
 		}
 		
-		// note the schema version for a specified store property 
-		public static function getSchemaVersion(propName:String):uint {
-			var version:uint = 0;
-			if (!schemaVer) {
-				trace('DB.getSchemaVersion: uninited SchemaInfo');
+		public static function existsTable(name:String):Boolean {
+			getSchema(true);
+			if (!dbSchema || !dbSchema.tables) return false;
+			
+			var exists:Boolean = false;
+			for each (var tbl:SQLTableSchema in dbSchema.tables) {
+				if (tbl.name == name) exists = true;
 			}
-			if (schemaVer.load({property: propName})) {
-				version = schemaVer.value as uint;
-			} 
-			return version;
-		} 
-		
-		public static function setSchemaVersion(prop:String, val:uint):Boolean {
-			var rc:Boolean = false;
-			if (!schemaVer) {
-				trace('DB.getSchemaVersion: uninited SchemaInfo');
-				throw "SchemaInfo Missing";
-			}
-			if (!schemaVer.load({property: prop})) {
-				rc = schemaVer.create({property: prop, value: val});
-			} else if (schemaVer.value != val) {
-				rc = schemaVer.update({value: val});
-			}
-			return rc;
+			return exists;
 		}
-				
+		
 		public static function migrate(mobj:IMigratable):void {
 			var fromVer:uint = 0;			
 			var newVer:uint = 0;
@@ -126,7 +116,9 @@ package com.memamsa.airdb
 			// remember the migrations we have done
 			dbMigrations[store] = mobj;
 			
-			if (!schemaVer || !schemaVer.load({property: store})) {
+			if (mobj.storeName == 'schema_infos') {
+				fromVer = 0
+			} else if (!schemaVer.load({property: store})) {
 				fromVer = 0;
 			} else {
 				fromVer = schemaVer.value as uint;
@@ -135,13 +127,13 @@ package com.memamsa.airdb
 			if (newVer != fromVer) {
 				latestSchema = false;
 			}
-			if (schemaVer) {
+			if (mobj.storeName != 'schema_infos') {
 				if (!schemaVer.load({property: store})) {
 					schemaVer.create({property: store, value: newVer});
 				} else {
 					schemaVer.value = newVer;
 					schemaVer.update();
-				}
+				}				
 			}
 		}
 		
