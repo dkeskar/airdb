@@ -26,7 +26,7 @@ package com.memamsa.airdb
 		public static function getMetadata(obj:Object, metadataType:String, includeSuperClasses:Boolean = false):XMLList {
 			var info:XML = Reflector.describe(obj);		// flash.utils.describeType(obj); //
 			var metadata:XMLList = info..metadata.(@name == metadataType);
-			trace('metadata: ' + metadata);
+//			trace('metadata: ' + metadata);
 			
 			if (includeSuperClasses && info.extendsClass.length()) {
 				metadata += getMetadata(info.extendsClass[0].@type, metadataType, true);

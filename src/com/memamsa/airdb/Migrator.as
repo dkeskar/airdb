@@ -108,7 +108,7 @@ package com.memamsa.airdb
 			if (!existsColumn(name)) {
 				stmt.text = "ALTER TABLE " + mStoreName + " ADD COLUMN " + 
 				  DB.fieldMap([name, dataType, options]);
-				trace('addColumn: ' + stmt.text);
+        /*trace('addColumn: ' + stmt.text);*/
 				stmt.execute();
 			}
 		}	
@@ -128,7 +128,7 @@ package com.memamsa.airdb
 			
 			var defs:Array = [];
 			for (var ix:uint = 0; ix < mFieldSet.length; ix++) {
-				trace("ix: " + ix + " : " + mFieldSet[ix].toString());
+        /*trace("ix: " + ix + " : " + mFieldSet[ix].toString());*/
 				defs.push(DB.fieldMap(mFieldSet[ix]));
 			}
 			stmt.text = "CREATE TABLE IF NOT EXISTS " + mStoreName + 

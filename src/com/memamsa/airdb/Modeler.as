@@ -39,7 +39,6 @@ package com.memamsa.airdb
 
 			var fqName:String = flash.utils.getQualifiedClassName(this);
 			var model:Class = flash.utils.getDefinitionByName(fqName) as Class;
-			trace('prototype storage and fieldnames: ' + model.prototype.storeName + ": " + model.prototype.fieldNames);
 			mStoreName = model.prototype.storeName; 
 			for each (var fname:* in model.prototype.fieldNames) {
 				fieldValues[fname] = null;
@@ -79,7 +78,6 @@ package com.memamsa.airdb
 			if (!keyvals) return false;
 				
 			var conditions:Array = [];
-			trace("prop test: id " + this['id'] + " property " + this['property'] + " value " + this['value']);
 			stmt.text = "SELECT * FROM " + mStoreName + " WHERE ";
 			for (var key:String in keyvals) {
 				var clause:String = "";
@@ -282,14 +280,12 @@ package com.memamsa.airdb
 		 * Property Overrides to handle column names and associations 
 		 **/
 		override flash_proxy function hasProperty(name:*):Boolean {
-			trace('hasProperty: ' + mStoreName + '.' + name);
 			// TODO: also check associations meta-data
 			return fieldValues.hasOwnProperty(name);
 		} 
 		
 		override flash_proxy function getProperty(name:*):* {
 			name = name.toString();
-			trace('getProperty: ' + mStoreName + '.' + name);
 			if (name == 'storeName') return mStoreName;
 						
 			if (fieldValues.hasOwnProperty(name)) {
@@ -316,7 +312,6 @@ package com.memamsa.airdb
 		}
 		
 		override flash_proxy function setProperty(name:*, value:*):void {
-			trace('setProperty: ' + mStoreName + '.' + name + '=' + value);
 			if (fieldValues.hasOwnProperty(name)) {
 				fieldValues[name] = value;
 				recChanged = true;
@@ -327,7 +322,6 @@ package com.memamsa.airdb
 		}
 		
 		override flash_proxy function callProperty(name:*, ...args):* {
-			trace('callProperty: ' + mStoreName + '.' + name + ' args: ' + args.length);
 			var matchSyntax:Array = name.toString().match(/^([a-z]+)(.+)/);
 			
 			return false;

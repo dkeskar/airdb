@@ -22,9 +22,7 @@ package com.memamsa.airdb
 		
 		// The database name 
 		// Currently all models in the application stored in the same DB.
-		// Parametrize for multi-DB support: 
-		// getConnection(name), getSchema(name), dbNames:Object
-		public static const DefaultDB:String = "dmapp.db";
+		private static var defaultDB:String;
 		
 		// The database connection and its initialization state.
 		private static var dbConn:SQLConnection = null;
@@ -48,15 +46,24 @@ package com.memamsa.airdb
     }
     
 		// initialize database etc. 
-		public static function initDB(dbname:String=null):void {
+		public static function initDB(dbname:String):void {
+		  defaultDB = dbname;
 			getConnection(dbname);
+			if (dbInit) {
+			  for (var store:String in dbMigrations) {
+			    DB.runMigration(dbMigrations[store]);
+			  }
+			}
 		}
 		
 		// get a connection to the database
 		// Sync only supported
-		public static function getConnection(dbname:String=null):SQLConnection {
-			if (!dbname) dbname = DB.DefaultDB;
+		public static function getConnection(dbname:String = null):SQLConnection {
+		  if (!dbname && !dbInit && !defaultDB) {
+		    throw "DB not inited.";
+		  }
 			if (!dbConn && !dbInit) {
+			  dbname = defaultDB;
 				var dbfile:File = File.applicationStorageDirectory.resolvePath(dbname);								
 				dbConn = new SQLConnection();
 				dbConn.addEventListener(SQLEvent.OPEN, DB.onDBOpen);
@@ -73,7 +80,7 @@ package com.memamsa.airdb
 		}
 		
 		private static function onDBOpen(event:SQLEvent):void	{
-			trace('onDBOpen ' + event.toString());
+      /*trace('onDBOpen ' + event.toString());*/
 		}
 		
 		// get the schema (cached) 
@@ -92,6 +99,7 @@ package com.memamsa.airdb
 		
 		public static function getTableSchema(name:String, refresh:Boolean = false):SQLTableSchema {
 			getSchema(refresh);
+			if (!dbSchema ||!dbSchema.tables) return null;
 			for each (var tbl:SQLTableSchema in dbSchema.tables) {
 				if (tbl.name == name) return tbl;
 			} 
@@ -110,13 +118,20 @@ package com.memamsa.airdb
 		}
 		
 		public static function migrate(mobj:IMigratable):void {
+			var store:String = mobj.storeName;
+			if (!dbInit) {
+			  dbMigrations[store] = mobj;
+			  return;
+			}
+			runMigration(mobj);
+		}
+		
+		private static function runMigration(mobj:IMigratable):void {
 			var fromVer:uint = 0;			
 			var newVer:uint = 0;
 			var store:String = mobj.storeName;
-			// remember the migrations we have done
-			dbMigrations[store] = mobj;
 			
-			if (mobj.storeName == 'schema_infos') {
+			if (store == 'schema_infos') {
 				fromVer = 0
 			} else if (!schemaVer.load({property: store})) {
 				fromVer = 0;
@@ -127,14 +142,14 @@ package com.memamsa.airdb
 			if (newVer != fromVer) {
 				latestSchema = false;
 			}
-			if (mobj.storeName != 'schema_infos') {
+			if (store != 'schema_infos') {
 				if (!schemaVer.load({property: store})) {
 					schemaVer.create({property: store, value: newVer});
 				} else {
 					schemaVer.value = newVer;
 					schemaVer.update();
 				}				
-			}
+			}		  
 		}
 		
 		// run all the migrations
