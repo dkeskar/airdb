@@ -27,21 +27,26 @@ package com.memamsa.airdb
 
 			stmt = new SQLStatement();
 			dbConn = stmt.sqlConnection = DB.getConnection();
-			
-			if (options && options.hasOwnProperty('id') && options['id']) {
-				column('id', DB.Field.Serial);
-			} 
+						
 			if (options && options.hasOwnProperty('storage') && options['storage']) {
 				mStoreName = options['storage'];
 			} else {
-				mStoreName = DB.mapTable(mKlass);
+			  mStoreName = DB.mapTable(mKlass);
 			}
 			mKlass.prototype.storeName = mStoreName; 
+			// get table schema before processing column options
 			mTableSchema = DB.getTableSchema(mStoreName);
 			if (mTableSchema) {
 				for each (var col:SQLColumnSchema in mTableSchema.columns) {
 					mAddedColumns[col.name] = col;
 				}				
+			}
+			// process column specifiers shortcuts
+		  if (options && options.hasOwnProperty('id') && options['id']) {
+				column('id', DB.Field.Serial);
+			}
+			if (options && options.hasOwnProperty('guid') && options.guid) {
+			  column('guid', DB.Field.VarChar, {limit: options.guid});
 			}
 			DB.migrate(this);
 			schemate();
@@ -162,7 +167,7 @@ package com.memamsa.airdb
 	  	return (mAddedColumns[name] ? true : false);
 	  }	
 	  
-	  private function matchesColumn(name:String, dataType:uint, options:Object) {
+	  private function matchesColumn(name:String, dataType:uint, options:Object):Boolean {
 	  	// modify column not yet supported.
 	  	return false;
 	  }  

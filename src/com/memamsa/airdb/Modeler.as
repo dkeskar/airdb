@@ -19,7 +19,7 @@ package com.memamsa.airdb
 		// storeName - the DB table associated with this Model.
 		 
 		// The field values found, updated or created
-		private var newRecord:Boolean;
+		private var recNew:Boolean;
 		private var recLoaded:Boolean;
 		private var recChanged:Boolean;
 		private var fieldsChanged:Object = {};
@@ -44,7 +44,14 @@ package com.memamsa.airdb
 				fieldValues[fname] = null;
 			}
 			// new ModelClass() is for creating new record
-			newRecord = true;
+			recNew = true;
+		}
+		
+		// find and load data into an instance of a Modeler sub-class
+		public static function findery(klass:Class, keyvals:Object):Modeler {
+		  var obj:Modeler = new klass;
+		  if (!obj.load(keyvals)) return null;
+		  return obj;
 		}
 		
 		// initialize this object to hold fields for a new record. 
@@ -61,7 +68,7 @@ package com.memamsa.airdb
 				}
 			}
 			// TODO: add check if primary id is being set
-			newRecord = true;
+			recNew = true;
 		}
 
 		// save newly initialized or modified data
@@ -99,7 +106,7 @@ package com.memamsa.airdb
 				if (result.data.length > 0) {
 					// we trust the DB schema so whole new assignment is ok.
 					fieldValues = result.data[0];
-					newRecord = false;
+					recNew = false;
 					recLoaded = true;
 				}
 			} catch (error:SQLError) {
@@ -169,20 +176,29 @@ package com.memamsa.airdb
 			if (!values && newRecord) {
 				values = fieldValues;
 			}
-			stmt.text = "INSERT INTO " + mStoreName;
-			var cols:Array = [];
-			var vals:Array = [];
-			timeStamp('created_at', values);
 			for (key in values) {
 				if (!fieldValues.hasOwnProperty(key)) {
 					trace('create: unknown fields specified');
 					throw "FieldUnknown";
 				}
 				if (values[key] == null) continue;
-				cols.push(key);
-				vals.push(DB.sqlMap(values[key]));
 				fieldValues[key] = values[key];
 			}
+			// The before hooks may change fields using latest values			
+			beforeCreate();
+			beforeSave();
+			if (!validateData()) return false; 
+			timeStamp('created_at');
+			
+			var cols:Array = [];
+			var vals:Array = [];
+			for (key in fieldValues) {
+				if (!fieldValues[key]) continue;
+			  cols.push(key);
+  			vals.push(DB.sqlMap(fieldValues[key]));  			  
+			}
+
+			stmt.text = "INSERT INTO " + mStoreName;			
 			stmt.text += " (" + cols.join(',') + ")";
 			stmt.text += " VALUES (" + vals.join(',') + ")";
 			try {
@@ -190,12 +206,13 @@ package com.memamsa.airdb
 				var result:SQLResult = stmt.getResult();
 				if (result && result.complete) {
 					fieldValues['id'] = result.lastInsertRowID;
+    			recLoaded = true;					
 				}
 			} catch (error:SQLError) {
 				trace("ERROR: create: " + error.details);
 				return false;
 			}
-			newRecord = false;			
+			recNew = recChanged = false;
 			return true;
 		}
 		
@@ -203,7 +220,7 @@ package com.memamsa.airdb
 		public function update(values:Object=null):Boolean {
 			if (!values && !recChanged) return false;
 			// new records should be "created"
-			if (!values && (newRecord || !fieldValues['id'])) {
+			if (!values && newRecord) {
 			  throw mStoreName + ".update: Expected create";
 		  }
 
@@ -222,6 +239,10 @@ package com.memamsa.airdb
 					fieldsChanged[key] = true;
 				}
 			}
+			// The before hooks may change fields using latest values
+			beforeUpdate();
+			beforeSave();
+			if (!validateData()) return false;
 			if (changed) {
 				for (key in fieldsChanged) {
 					assigns.push(key + " = " + DB.sqlMap(fieldValues[key]));
@@ -275,6 +296,18 @@ package com.memamsa.airdb
 			}
 			return 0;
 		}
+		
+		/**
+		* Overridable functions for validation and automatic actions 
+		**/
+		// called when Modeler.save() called, whether new or existing
+		protected function beforeSave():void {}
+		// called before INSERT for new records
+		protected function beforeCreate():void {}
+		// called before UPDATE (and after beforeSave)
+		protected function beforeUpdate():void {}
+		// Called before save or create. If false, aborts DB operation
+		protected function validateData():Boolean {return true;}
 		
 		/** 
 		 * Property Overrides to handle column names and associations 
@@ -335,7 +368,7 @@ package com.memamsa.airdb
 		} 
 		
 		public function get unsaved():Boolean {
-			return newRecord || recChanged;
+			return (recNew || recChanged);
 		}
 
 		/**
@@ -363,7 +396,11 @@ package com.memamsa.airdb
 			}			
 			return sqs;
 		}
-				 
+		
+		public function get newRecord():Boolean {
+		  return (recNew || !fieldValues['id']);
+		}	
+			 
 		// reset all fields (empty object)
 		// Prior changes are discarded.
 		protected function resetFields():void	{
@@ -376,7 +413,7 @@ package com.memamsa.airdb
 		
 		// reset the state - extreme - use with caution
 		protected function resetState():void {
-			newRecord = recLoaded = recChanged = false;
+			recNew = recLoaded = recChanged = false;
 		} 
 
 		

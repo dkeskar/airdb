@@ -3,11 +3,13 @@ package com.memamsa.airdb
 	import flash.data.SQLStatement;
 	import flash.data.SQLResult;	
 	import flash.errors.SQLError;
+	import flash.utils.Proxy;
+	import flash.utils.flash_proxy;
 	
 	/**
 	 * Manages the load of associated objects
 	 **/
-	public class Associator
+	public class Associator extends Proxy
 	{
 		public static const Map:Object = {
 			has_and_belongs_to_many : DB.Has.AndBelongsToMany,
@@ -28,18 +30,22 @@ package com.memamsa.airdb
 		public function Associator(source:Modeler, target:Class, type:String) {
 			mySource = source;
 			sourceForeignKey = DB.mapForeignKey(source);
+			targetForeignKey = DB.mapForeignKey(target);
+			targetStoreName = DB.mapTable(target);
+			
+			myType = Associator.Map[type];
 			try {
-				myTarget = new target();
+			  if (myType == DB.Has.BelongsTo) {
+			    myTarget = Modeler.findery(target, {id: mySource[targetForeignKey]});
+			  } else {
+			    myTarget = new target();
+			  }				
 			} catch(e:Error) {
 				trace('Associator ERROR instantiating target class');
 			}
-			myType = Associator.Map[type];
 			
 			if (myType == DB.Has.AndBelongsToMany) {
 				joinTable = DB.mapJoinTable(source, target);
-				targetForeignKey = DB.mapForeignKey(target);
-				sourceForeignKey = DB.mapForeignKey(source);
-				targetStoreName = DB.mapTable(target);
 			}
 		}
 		
@@ -189,6 +195,25 @@ package com.memamsa.airdb
 			}
 			return false;	
 		}
+		
+		override flash_proxy function hasProperty(name:*):Boolean {
+			if (myType == DB.Has.BelongsTo) return myTarget.hasOwnProperty(name);
+			return false;
+		} 
+		
+		override flash_proxy function getProperty(name:*):* {
+		  if (myType == DB.Has.BelongsTo) return myTarget[name];
+			return undefined;
+		}
+		
+		override flash_proxy function setProperty(name:*, value:*):void {
+		  if (myType == DB.Has.BelongsTo) myTarget[name] = value;
+		}
+		
+		override flash_proxy function callProperty(name:*, ...args):* {
+			return false;
+		}
+		
 		
 		private function construct_query(params:Object = null):Object {
 			var query:Object = {
