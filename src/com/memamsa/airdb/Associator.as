@@ -146,7 +146,6 @@ package com.memamsa.airdb
 			      trace('Association already exists and no duplicates.');
 			      return true;
 			    }
-			    trace("Associator.push: Proceeding, noDup and nothing found.");
 			  } catch(error:SQLError) {
 			    trace('ERROR: Associator.push: ' + error.details);
 			  }		    

@@ -174,8 +174,10 @@ package com.memamsa.airdb
 		
 		// Map an object to its SQL representation appropriate for queries.
 		public static function sqlMap(value:Object):String {
+			if (!value) return 'null';
 			if (value is String) {
-				return "'" + value + "'";
+				if (value.length > 0) return "'" + value + "'";
+				if (value.length == 0) return '';
 			} else if (value is Date) {
 				var rstr:String = "";
 				var extr:Array = [
@@ -202,7 +204,7 @@ package com.memamsa.airdb
 					}
 				}
 				return "'" + rstr + "'";
-			} 
+			}  
 			return value.toString();			
 		}
 		

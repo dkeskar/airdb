@@ -18,10 +18,13 @@ package com.memamsa.airdb
 		// fieldNames - An Array of field names 
 		// storeName - the DB table associated with this Model.
 		 
-		// The field values found, updated or created
+		public static const PER_PAGE_LIMIT = 50;      // query pagination default
+		
+		// The field values found, updated, created or deleted
 		private var recNew:Boolean;
 		private var recLoaded:Boolean;
 		private var recChanged:Boolean;
+		private var recDeleted:Boolean;
 		private var fieldsChanged:Object = {};
 		private var mStoreName:String = null;
 		private var stmt:SQLStatement = null;
@@ -73,6 +76,7 @@ package com.memamsa.airdb
 
 		// save newly initialized or modified data
 		public function save():Boolean {
+		  if (recDeleted) {throw "Error: Can't modify or save deleted data" }
 			if (!newRecord && !recChanged) return false;
 			return (newRecord ? create() : update());
 		}
@@ -119,9 +123,9 @@ package com.memamsa.airdb
 		// Find using query predicates provided
 		// The query object keys supported are the SQL clauses: 
 		// conditions, group, order, limit, joins 
-		public function findAll(query: Object):Array {
+		public function findAll(query: Object, page=1, perPage=0):Array {
 			resetFields();
-			stmt.text = constructSql(query);
+			stmt.text = constructSql(query, page, perPage);
 			try {
 				stmt.execute();
 				var result:SQLResult = stmt.getResult();
@@ -135,7 +139,7 @@ package com.memamsa.airdb
 			}
 			return [];	
 		}
-
+		
 		// Count of the number of records
 		public function count():int {
 			resetFields();
@@ -171,6 +175,7 @@ package com.memamsa.airdb
 
 		// create a record with given values (or using object values)
 		public function create(values:Object=null):Boolean {
+		  if (recDeleted) {throw "Error: Can't modify or save deleted data" }
 			if (!values && !newRecord) return false;
 			var key:String;
 			if (!values && newRecord) {
@@ -218,6 +223,7 @@ package com.memamsa.airdb
 		
 		// update currently loaded/init'd record with new values		
 		public function update(values:Object=null):Boolean {
+		  if (recDeleted) {throw "Error: Can't modify or save deleted data" }
 			if (!values && !recChanged) return false;
 			// new records should be "created"
 			if (!values && newRecord) {
@@ -297,6 +303,25 @@ package com.memamsa.airdb
 			return 0;
 		}
 		
+		// Delete this record
+		public function remove():Boolean {
+		  if (!fieldValues.id) return false;
+		  stmt.text = "DELETE FROM " + mStoreName + ' WHERE (id IN (' + fieldValues.id + '))';
+		  try {
+		    stmt.execute();
+		    var result:SQLResult = stmt.getResult();
+		    if (!result || !result.data) {
+		      trace('DELETE failed');
+		      return false;
+		    }
+		  } catch (error:SQLError) {
+		    trace('ERROR:delete: '  + error.details);
+		    return false;
+		  }
+		  recDeleted = true;
+		  return true;
+		}
+		
 		/**
 		* Overridable functions for validation and automatic actions 
 		**/
@@ -345,6 +370,7 @@ package com.memamsa.airdb
 		}
 		
 		override flash_proxy function setProperty(name:*, value:*):void {
+		  if (recDeleted) {throw "Error: Can't modify or save deleted data" }
 			if (fieldValues.hasOwnProperty(name)) {
 				fieldValues[name] = value;
 				recChanged = true;
@@ -375,7 +401,7 @@ package com.memamsa.airdb
 		 * Private Helpers and Operations Support
 		 **/
 		// construct sql from object parameters
-		private function constructSql(query:Object):String {
+		private function constructSql(query:Object, page=1, perPage=0):String {
 			var sqs:String = "SELECT ";
 			sqs += (query && query.select) ? query.select : "*"; 
 			sqs += " FROM " + mStoreName;
@@ -391,9 +417,18 @@ package com.memamsa.airdb
 			if (query && query.order) {
 				sqs += " ORDER BY " + query.order;
 			}
+			var lim:int = 0;
 			if (query && query.limit) {
-				sqs += " LIMIT " + query.limit;
-			}			
+			  lim = query.limit;
+		  } else if (perPage > 0) {
+		    lim = perPage;
+		  }
+		  if (lim > 0) {
+		    sqs += " LIMIT " + lim;
+  			if (page > 1 && perPage > 0)	{
+  			  sqs += " OFFSET " + (page - 1)*perPage;
+  			}		    
+		  }			
 			return sqs;
 		}
 		
@@ -413,7 +448,7 @@ package com.memamsa.airdb
 		
 		// reset the state - extreme - use with caution
 		protected function resetState():void {
-			recNew = recLoaded = recChanged = false;
+			recNew = recLoaded = recChanged = recDeleted = false;
 		} 
 
 		
