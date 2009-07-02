@@ -18,7 +18,7 @@ package com.memamsa.airdb
 		// fieldNames - An Array of field names 
 		// storeName - the DB table associated with this Model.
 		 
-		public static const PER_PAGE_LIMIT = 50;      // query pagination default
+		public static const PER_PAGE_LIMIT:int = 50;      // query pagination default
 		
 		// The field values found, updated, created or deleted
 		private var recNew:Boolean;
@@ -66,8 +66,7 @@ package com.memamsa.airdb
 				if (fieldValues.hasOwnProperty(key)) {
 					fieldValues[key] = values[key];
 				} else {
-					trace('data: unknown field: ' + key);
-					throw 'FieldUnknown';
+					throw new Error(mStoreName + ': Field Unknown:' + key);
 				}
 			}
 			// TODO: add check if primary id is being set
@@ -76,7 +75,9 @@ package com.memamsa.airdb
 
 		// save newly initialized or modified data
 		public function save():Boolean {
-		  if (recDeleted) {throw "Error: Can't modify or save deleted data" }
+		  if (recDeleted) {
+		    throw new Error("Can't modify or save deleted data");
+		  }
 			if (!newRecord && !recChanged) return false;
 			return (newRecord ? create() : update());
 		}
@@ -93,8 +94,7 @@ package com.memamsa.airdb
 			for (var key:String in keyvals) {
 				var clause:String = "";
 				if (!fieldValues.hasOwnProperty(key)) {
-					trace('find: unknown field ' + key + ' in condition properties');
-					throw "FieldUnknown: " + key;
+					throw new Error(mStoreName + ": Field Unknown: " + key);
 				}
 				clause += key + ' = ' + DB.sqlMap(keyvals[key]);
 				conditions.push(clause);
@@ -104,7 +104,6 @@ package com.memamsa.airdb
 				stmt.execute();
 				var result:SQLResult = stmt.getResult();
 				if (!result || !result.data) {
-					trace('find: no rows');
 					return false;
 				}
 				if (result.data.length > 0) {
@@ -123,14 +122,13 @@ package com.memamsa.airdb
 		// Find using query predicates provided
 		// The query object keys supported are the SQL clauses: 
 		// conditions, group, order, limit, joins 
-		public function findAll(query: Object, page=1, perPage=0):Array {
+		public function findAll(query: Object, page:int=1, perPage:int=0):Array {
 			resetFields();
 			stmt.text = constructSql(query, page, perPage);
 			try {
 				stmt.execute();
 				var result:SQLResult = stmt.getResult();
 				if (!result || !result.data) {
-					trace('findall: query returned zero results');
 					return [];
 				}
 				return result.data;
@@ -150,7 +148,7 @@ package com.memamsa.airdb
 				if (result && result.data && result.data.length >= 1) {
 					return result.data[0].count;
 				}
-				trace('count: cannot interpret result'); 
+				throw new Error(mStoreName + '.count: cannot interpret result'); 
 			} catch (error:SQLError) {
 				trace("ERROR: count: " + error.details);
 			}
@@ -175,7 +173,9 @@ package com.memamsa.airdb
 
 		// create a record with given values (or using object values)
 		public function create(values:Object=null):Boolean {
-		  if (recDeleted) {throw "Error: Can't modify or save deleted data" }
+		  if (recDeleted) {
+		    throw new Error("Can't modify or save deleted data");
+		  }
 			if (!values && !newRecord) return false;
 			var key:String;
 			if (!values && newRecord) {
@@ -184,7 +184,7 @@ package com.memamsa.airdb
 			for (key in values) {
 				if (!fieldValues.hasOwnProperty(key)) {
 					trace('create: unknown fields specified');
-					throw "FieldUnknown";
+					throw new Error(mStoreName + ".create: Field Unknown: " + key);
 				}
 				if (values[key] == null) continue;
 				fieldValues[key] = values[key];
@@ -223,11 +223,13 @@ package com.memamsa.airdb
 		
 		// update currently loaded/init'd record with new values		
 		public function update(values:Object=null):Boolean {
-		  if (recDeleted) {throw "Error: Can't modify or save deleted data" }
+		  if (recDeleted) {
+		    throw new Error("Can't modify or save deleted data"); 
+		  }
 			if (!values && !recChanged) return false;
 			// new records should be "created"
 			if (!values && newRecord) {
-			  throw mStoreName + ".update: Expected create";
+			  throw new Error(mStoreName + ".update: Expected create");
 		  }
 
 			var assigns:Array = [];
@@ -237,7 +239,7 @@ package com.memamsa.airdb
 			for (key in values) {
 				if (!fieldValues.hasOwnProperty(key)) {
 					trace('update: unknown field: ' + key);
-					throw 'FieldUnknown';
+					throw new Error(mStoreName + '.update: Field Unknown: ' + key);
 				}
 				if (values[key] && fieldValues[key] != values[key] && key != 'id') {
 					fieldValues[key] = values[key];
@@ -280,7 +282,7 @@ package com.memamsa.airdb
 			for (var key:String in values) {
 				if (!fieldValues.hasOwnProperty(key)) {
 					trace('update: unknown field: ' + key);
-					throw 'FieldUnknown';
+					throw new Error(mStoreName + '.updateAll: Field Unknown: ' + key);
 				}
 				assigns.push(key + ' = ' + DB.sqlMap(values[key]));
 			}
@@ -370,13 +372,15 @@ package com.memamsa.airdb
 		}
 		
 		override flash_proxy function setProperty(name:*, value:*):void {
-		  if (recDeleted) {throw "Error: Can't modify or save deleted data" }
+		  if (recDeleted) {
+		    throw new Error("Can't modify or save deleted data"); 
+		  }
 			if (fieldValues.hasOwnProperty(name)) {
 				fieldValues[name] = value;
 				recChanged = true;
 				fieldsChanged[name] = true;		
 			} else {
-				throw "Property Unknown"
+				throw new Error("Unknown Property: " + name);
 			}			
 		}
 		
@@ -401,7 +405,7 @@ package com.memamsa.airdb
 		 * Private Helpers and Operations Support
 		 **/
 		// construct sql from object parameters
-		private function constructSql(query:Object, page=1, perPage=0):String {
+		private function constructSql(query:Object, page:int=1, perPage:int=0):String {
 			var sqs:String = "SELECT ";
 			sqs += (query && query.select) ? query.select : "*"; 
 			sqs += " FROM " + mStoreName;

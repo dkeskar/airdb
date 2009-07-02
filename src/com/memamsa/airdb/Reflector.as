@@ -4,6 +4,12 @@ package com.memamsa.airdb
 	import flash.utils.describeType;
 	import flash.utils.getDefinitionByName;
 	
+	/**
+	*  Based on the Reflection.as by Jacob Wright (http://jacwright.com)
+	*  Source - AIR ActiveRecord - 
+	*  http://code.google.com/p/air-activerecord/source/browse/trunk/src/flight/utils/Reflection.as
+	**/
+	
 	public class Reflector
 	{
 		protected static var cache:Dictionary = new Dictionary();

@@ -1,7 +1,7 @@
 package com.memamsa.airdb
 {
+	import flash.data.SQLResult;
 	import flash.data.SQLStatement;
-	import flash.data.SQLResult;	
 	import flash.errors.SQLError;
 	import flash.utils.Proxy;
 	import flash.utils.flash_proxy;
@@ -97,8 +97,7 @@ package com.memamsa.airdb
 		  
 			if (mySource.unsaved) mySource.save();
 			if (!mySource['id']) {
-				trace('Associator.' + targetStoreName + '.push: source ID unknown');
-				throw 'Unknown ID';
+				throw new Error(targetStoreName + ': Source ID is unknown');
 			}
 		  
 			if (obj is Modeler) {
@@ -110,8 +109,7 @@ package com.memamsa.airdb
 		    }			  
 			  if (obj.unsaved) obj.save();
 			  if (!obj['id']) {
-			    trace('Associator.' + targetStoreName + '.push: target has no ID');
-			    throw "UnknownID";
+			    throw new Error(targetStoreName + ": target has no id");
 			  }
 			  targetId = obj['id'];
 			} 
@@ -131,7 +129,7 @@ package com.memamsa.airdb
 		
     // Find or create using SQL statements
     // Used by various kinds of push associators
-		private function find_or_create(sourceId:int, targetId:int, noDup:Boolean = true) {
+		private function find_or_create(sourceId:int, targetId:int, noDup:Boolean = true):Boolean {
       var stmt:SQLStatement = new SQLStatement();
       stmt.sqlConnection = DB.getConnection();
       

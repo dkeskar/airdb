@@ -13,7 +13,7 @@ package com.memamsa.airdb
 	{
 		// Enumerations for Stored Data Types 
 		public static const Field:Object = {
-			Serial: 1, Integer: 2, VarChar: 3, DateTime: 4, Text: 5, Blob: 6
+			Serial: 1, Integer: 2, VarChar: 3, DateTime: 4, Text: 5, Blob: 6, Float: 7
 		}
 		// Enumerations for Association types
 		public static const Has:Object = {
@@ -60,7 +60,7 @@ package com.memamsa.airdb
 		// Sync only supported
 		public static function getConnection(dbname:String = null):SQLConnection {
 		  if (!dbname && !dbInit && !defaultDB) {
-		    throw "DB not inited.";
+		    throw new Error("DB not inited.");
 		  }
 			if (!dbConn && !dbInit) {
 			  dbname = defaultDB;
@@ -219,6 +219,9 @@ package com.memamsa.airdb
 						break;
 					case Field.Integer:
 						stmt += ' INTEGER';
+						break;
+					case Field.Float:
+						stmt += ' REAL';
 						break;
 					case Field.VarChar:
 						var lim:String = '255';

@@ -1,5 +1,10 @@
 package com.memamsa.airdb
 {
+  /**
+  * Author: Jacob Wright http://jacwright.com
+  * Source: AIR ActiveRecord - 
+  * http://code.google.com/p/air-activerecord/source/browse/trunk/src/flight/utils/Inflector.as
+  **/
 	public class Inflector
 	{
 		/**
