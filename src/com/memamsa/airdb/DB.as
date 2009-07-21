@@ -238,7 +238,8 @@ package com.memamsa.airdb
 						stmt += ' TEXT';
 						break;
 				}
-				if (fieldSpec.length > 2 && fieldSpec[2] && fieldSpec[2]['default']) {
+				if (fieldSpec.length > 2 && fieldSpec[2] && 
+					typeof(fieldSpec[2]['default']) != 'undefined') {
 					stmt += ' DEFAULT ' + fieldSpec[2]['default'].toString();
 				}
 			}
@@ -262,7 +263,9 @@ package com.memamsa.airdb
 		}
 		
 		public static function mapJoinTable(klass1:*, klass2:*):String {
-			return mapTable(klass1) + '_' + mapTable(klass2);
+		  var parts:Array = [mapTable(klass1), mapTable(klass2)];
+		  return parts.sort().join('_');
+      /*return mapTable(klass1) + '_' + mapTable(klass2);*/
 		} 
 		
 		public static function mapForeignKey(klass:*):String {
