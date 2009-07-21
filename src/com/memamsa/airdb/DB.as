@@ -237,10 +237,37 @@ package com.memamsa.airdb
 					case Field.Text:
 						stmt += ' TEXT';
 						break;
+						
 				}
-				if (fieldSpec.length > 2 && fieldSpec[2] && 
-					typeof(fieldSpec[2]['default']) != 'undefined') {
-					stmt += ' DEFAULT ' + fieldSpec[2]['default'].toString();
+				// Process the options
+				if (fieldSpec.length > 2 && fieldSpec[2]) {
+					for (var optionKey:String in fieldSpec[2]) {
+						var option:String = fieldSpec[2][optionKey].toString();
+						switch (optionKey) {
+							case 'limit' :
+								// Handled under VarChar above.  Do nothing.
+								break;
+							case 'defaultValue' :
+							case 'default': 
+								stmt += ' DEFAULT ' + option;
+								break;
+							case 'primaryKey' :
+								if (option == "true") {
+									stmt += ' PRIMARY KEY';
+								}
+								break;
+							case 'allowNull' :
+								if (option == "false") {
+									stmt += ' NOT NULL';
+								}
+								break;
+							case 'unique' :
+								if (option == "true") {
+									stmt += ' UNIQUE';
+								} 
+								break;
+						}
+					}
 				}
 			}
 			return stmt;
