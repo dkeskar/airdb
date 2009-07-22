@@ -248,6 +248,9 @@ package com.memamsa.airdb
 							case 'limit' :
 								// Handled under VarChar above.  Do nothing.
 								break;
+							case 'default' :
+								stmt += ' DEFAULT ' + option;
+								break;
 							case 'defaultValue' :
 								stmt += ' DEFAULT ' + option;
 								break;
