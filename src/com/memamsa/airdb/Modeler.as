@@ -261,7 +261,7 @@ package com.memamsa.airdb
 					if ((values && values.hasOwnProperty('id')) || (fieldValues && fieldValues.hasOwnProperty('id'))) {
 						stmt.text += " WHERE id = " + ((values && values['id']) || fieldValues['id']).toString();
 					} else if (values && values.hasOwnProperty('rowid') || (fieldValues && fieldValues.hasOwnProperty('rowid'))) {
-						stmt.text += " WHERE id = " + ((values && values['rowid']) || fieldValues['rowid']).toString();
+						stmt.text += " WHERE ROWID = " + ((values && values['rowid']) || fieldValues['rowid']).toString();
 					}
 				}
 				
