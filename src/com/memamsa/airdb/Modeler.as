@@ -90,7 +90,7 @@ package com.memamsa.airdb
 			if (!keyvals) return false;
 				
 			var conditions:Array = [];
-			stmt.text = "SELECT * FROM " + mStoreName + " WHERE ";
+			stmt.text = "SELECT *, ROWID FROM " + mStoreName + " WHERE ";
 			for (var key:String in keyvals) {
 				var clause:String = "";
 				if (!fieldValues.hasOwnProperty(key)) {
@@ -257,9 +257,14 @@ package com.memamsa.airdb
 				}
 				stmt.text = "UPDATE " + mStoreName + " SET ";
 				stmt.text += assigns.join(',');
-				if (recLoaded || (values && values.hasOwnProperty('id'))) {
-					stmt.text += " WHERE id = " + ((values && values['id']) || fieldValues['id']).toString(); 
+				if (recLoaded || values) {
+					if ((values && values.hasOwnProperty('id')) || (fieldValues && fieldValues.hasOwnProperty('id'))) {
+						stmt.text += " WHERE id = " + ((values && values['id']) || fieldValues['id']).toString();
+					} else if (values && values.hasOwnProperty('rowid') || (fieldValues && fieldValues.hasOwnProperty('rowid'))) {
+						stmt.text += " WHERE id = " + ((values && values['rowid']) || fieldValues['rowid']).toString();
+					}
 				}
+				
 				try {
 					stmt.execute();
 				} catch (error:SQLError) {
