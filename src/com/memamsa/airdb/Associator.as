@@ -7,10 +7,29 @@ package com.memamsa.airdb
 	import flash.utils.flash_proxy;
 	
 	/**
-	 * Manages the load of associated objects
-	 **/
+	*  Associator
+	*  Manages the load of associated objects that map DB relationships into 
+	*  object aggregation with support for chaining method invocations.
+	*  
+	*  Facilitates object relational modeling of schema relationships such as 
+	*  "has-many", "belongs-to", "many-many". For example: 
+	*  
+	*  post belongs-to author and author has-many comments: 
+	*  post.author.comments.list();
+	*  
+	*  Several associations can be specified as Class meta-data in the package
+	*  with the following format: 
+	*  
+	*  [Association(name="aname", className="cname", type="atype")]  
+	*  
+	*  where:
+	*     aname = the name by which the association is invoked (e.g. "comments")
+	*     cname = FQN of the associated class, e.g. com.example.model.Comment
+	*     atype = Association type, e.g. "has_many"
+	**/
 	public class Associator extends Proxy
 	{
+	  // String names and const mappings for supported association types
 		public static const Map:Object = {
 			has_and_belongs_to_many : DB.Has.AndBelongsToMany,
 			has_one: DB.Has.One,
@@ -18,16 +37,24 @@ package com.memamsa.airdb
 			belongs_to: DB.Has.BelongsTo
 		};
 		
-		private var mySource:Modeler;
-		private var myTarget:Modeler;
-		private var myType:uint;
-		private var joinTable:String;
-		private var mPropName:String;						// triggered by what property name
-		private var targetForeignKey:String;
-		private var sourceForeignKey:String;
-		private var targetStoreName:String;
+		// Associator maps a source property to a target object
+		// Invoked methods are handled by the Associator itself or passed onto 
+		// the target object methods
+		// 
+		private var mySource:Modeler;   // source invoking association as property
+		private var myTarget:Modeler;   // target object whose methods are invoked
+		private var myType:uint;        // association type
+		private var joinTable:String;   // for has_and_belongs_to_many
+		private var mPropName:String;		// association name as property of source
+		private var targetForeignKey:String;    // foreign key for target model
+		private var sourceForeignKey:String;    // join table foreign key for source
+		private var targetStoreName:String;     // table name for target
 		
+		// Construct an associator. 
+		// The source and targets are Modeler objects, although the target is 
+		// specified just via the classname.
 		public function Associator(source:Modeler, target:Class, type:String) {
+		  // store information and generated mappings
 			mySource = source;
 			sourceForeignKey = DB.mapForeignKey(source);
 			targetForeignKey = DB.mapForeignKey(target);
@@ -36,8 +63,11 @@ package com.memamsa.airdb
 			myType = Associator.Map[type];
 			try {
 			  if (myType == DB.Has.BelongsTo) {
+			    // Find the specific target corresponding to this source object. 
 			    myTarget = Modeler.findery(target, {id: mySource[targetForeignKey]});
 			  } else {
+			    // In other cases, we just need a generic target model on which we 
+			    // can invoke appropriate query operations.
 			    myTarget = new target();
 			  }				
 			} catch(e:Error) {
@@ -45,6 +75,8 @@ package com.memamsa.airdb
 			}
 			
 			if (myType == DB.Has.AndBelongsToMany) {
+			  // for many-many associations, we note the join table for efficiently
+			  // constructing queries later. 
 				joinTable = DB.mapJoinTable(source, target);
 			}
 		}

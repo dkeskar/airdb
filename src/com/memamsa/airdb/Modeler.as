@@ -1,8 +1,16 @@
 package com.memamsa.airdb
 {
 	/**
-	 * Basic Object Relation Modeling
-	 * data, load, create, update, delete, save, find
+	 * Modeler
+	 * Provides base class functionality for Object Relational Modeling of 
+	 * database tables. Sub-classes of Modeler (models) are automatically
+	 * mapped to database tables, and support data manipulation and query methods
+	 * such as load, create, update, delete, save and findAll.
+	 * 
+	 * The actual schema for the model table is independent of the Modeler. 
+	 * AirDB provides the Migrator class to allow models to dynamically evolve and
+	 * migrate their schema. The Modeler uses the schema information for checking
+	 * field names and optimizing certain operations. 
 	 **/
 	import flash.data.SQLResult;
 	import flash.data.SQLStatement;
@@ -14,19 +22,21 @@ package com.memamsa.airdb
 	
 	public class Modeler extends Proxy
 	{
-		// Note: Migrator puts following on the Modeler class prototype
-		// fieldNames - An Array of field names 
-		// storeName - the DB table associated with this Model.
+	  /**
+	  *  Note: Migrator puts following on the Modeler class prototype
+	  *  fieldNames - An Array of field names 
+	  *  storeName - the DB table associated with this Model.
+	  **/
 		 
-		public static const PER_PAGE_LIMIT:int = 50;      // query pagination default
-		
 		// The field values found, updated, created or deleted
-		private var recNew:Boolean;
-		private var recLoaded:Boolean;
-		private var recChanged:Boolean;
-		private var recDeleted:Boolean;
+		private var recNew:Boolean;           // newly initialized fields
+		private var recLoaded:Boolean;        // fields loaded from DB
+		private var recChanged:Boolean;       // fields have been changed
+		private var recDeleted:Boolean;       // delete operation carried out
+		// The actual fields that changed. 
+		// Used for efficiently saving or updating the record
 		private var fieldsChanged:Object = {};
-		private var mStoreName:String = null;
+		private var mStoreName:String = null; // our table name
 		private var stmt:SQLStatement = null;
 		
 		// sub-class(es) can access fieldValues directly (if they need to) 
@@ -34,23 +44,34 @@ package com.memamsa.airdb
 		
 		// associations
 		private var associations:Object = {};
-		
+
+		public static const PER_PAGE_LIMIT:int = 50;      // query pagination default
+				
 		public function Modeler()
 		{
+		  // create SQLStatement and SQLConnection for efficient reuse.
 			stmt = new SQLStatement();
 			stmt.sqlConnection = DB.getConnection();
 
+      // Get our storename and field values from the class prototype 
+      // information set by the Migrator.
 			var fqName:String = flash.utils.getQualifiedClassName(this);
 			var model:Class = flash.utils.getDefinitionByName(fqName) as Class;
 			mStoreName = model.prototype.storeName; 
 			for each (var fname:* in model.prototype.fieldNames) {
 				fieldValues[fname] = null;
 			}
-			// new ModelClass() is for creating new record
+			// set this to be a newly initialized object. 
+			// this allows new ModelClass() to be used for creating new record
 			recNew = true;
 		}
 		
-		// find and load data into an instance of a Modeler sub-class
+		// Static method to find and load data into an instance of a 
+		// Modeler sub-class. Used to get a particular model object based
+		// on some conditions. 
+		// e.g. if Post extends Modeler
+		// var post:Post = Modeler.findery(Post, {author: 'dude'});
+		//
 		public static function findery(klass:Class, keyvals:Object):Modeler {
 		  var obj:Modeler = new klass;
 		  if (!obj.load(keyvals)) return null;
@@ -155,6 +176,9 @@ package com.memamsa.airdb
 			return -1;
 		}
 		
+		// Count the number of reqcords which match query criteria 
+		// The query object accepts the following keys corresponding to SQL clauses.
+		// -> conditions, group, order, limit, joins
 		public function countAll(query:Object):int {
 			query.select = "COUNT(*) as count_all";
 			stmt.text = constructSql(query);
@@ -171,7 +195,9 @@ package com.memamsa.airdb
 			return -1;
 		}
 
-		// create a record with given values (or using object values)
+		// create a record with given values
+		// The given values, where specified, override the field values stored 
+		// currently in the Modeler object fieldValues. 
 		public function create(values:Object=null):Boolean {
 		  if (recDeleted) {
 		    throw new Error("Can't modify or save deleted data");
@@ -181,6 +207,7 @@ package com.memamsa.airdb
 			if (!values && newRecord) {
 				values = fieldValues;
 			}
+			// Apply specified values to ensure all fieldValues are the latest.
 			for (key in values) {
 				if (!fieldValues.hasOwnProperty(key)) {
 					trace('create: unknown fields specified');
@@ -189,7 +216,8 @@ package com.memamsa.airdb
 				if (values[key] == null) continue;
 				fieldValues[key] = values[key];
 			}
-			// The before hooks may change fields using latest values			
+			// Invoke overridable before-hook methods.
+			// The before hooks may change fields and act using latest values
 			beforeCreate();
 			beforeSave();
 			if (!validateData()) return false; 
@@ -221,7 +249,9 @@ package com.memamsa.airdb
 			return true;
 		}
 		
-		// update currently loaded/init'd record with new values		
+		// Update the database record for the currently loaded object to 
+		// reflect any changed values, including those specified as parameters 
+		// to this method.
 		public function update(values:Object=null):Boolean {
 		  if (recDeleted) {
 		    throw new Error("Can't modify or save deleted data"); 
@@ -236,29 +266,45 @@ package com.memamsa.airdb
 			var key:String;
 			var changed:Boolean = recChanged;
 			
+			// Apply specified values to ensure all fieldValues are latest
 			for (key in values) {
 				if (!fieldValues.hasOwnProperty(key)) {
 					trace('update: unknown field: ' + key);
 					throw new Error(mStoreName + '.update: Field Unknown: ' + key);
 				}
+				// Assumption: If there exists an 'id' field for this model, 
+				// then the id field value CANNOT be modified directly in update. 
+				// We simply ignore attempts to set the 'id' field value.
 				if (values[key] && fieldValues[key] != values[key] && key != 'id') {
 					fieldValues[key] = values[key];
+					// Note down field names that have changed (for efficient update)
 					changed = true;
 					fieldsChanged[key] = true;
 				}
 			}
-			// The before hooks may change fields using latest values
+			// Invoke overridable before-update, before-save and validateData hooks.
+			// These hooks get to perform validation or computation using the latest
+			// values which we set above.
 			beforeUpdate();
-			beforeSave();
+			beforeSave();			
 			if (!validateData()) return false;
+			
+			// Carry out the DB UPDATE if things actually have changed
 			if (changed) {
 				for (key in fieldsChanged) {
 					assigns.push(key + " = " + DB.sqlMap(fieldValues[key]));
 				}
 				stmt.text = "UPDATE " + mStoreName + " SET ";
 				stmt.text += assigns.join(',');
+				
+				// Assumption: we use the 'id' field to ensure that this specific
+				// record is updated. If there is not an 'id' field for the model, 
+				// the UPDATE will apply to all records. 
+				// The ID is either from the fieldValues previously populated with a 
+				// load() or by using the id key in the values passed to this method. 
 				if (recLoaded || (values && values.hasOwnProperty('id'))) {
-					stmt.text += " WHERE id = " + ((values && values['id']) || fieldValues['id']).toString(); 
+					stmt.text += " WHERE id = " + 
+					        ((values && values['id']) || fieldValues['id']).toString(); 
 				}
 				try {
 					stmt.execute();
@@ -275,6 +321,8 @@ package com.memamsa.airdb
 		
 		// Update all records matching conditions
 		// Returns the number of records updated 
+		// Use SQL-style condition and update clauses. 
+		// e.g. updateAll("some <> XY AND foo LIKE '%nice%'", "bar = 'value'")
 		public function updateAll(conditions:String, values:Object):uint {
 			resetFields();
 			stmt.text = "UPDATE " + mStoreName + " SET ";
@@ -307,8 +355,12 @@ package com.memamsa.airdb
 		
 		// Delete this record
 		public function remove():Boolean {
+		  // If there is no id field for this table, we have no basis to remove.
+		  // It is assumed that the object has been loaded with the record we 
+		  // wish to delete.
 		  if (!fieldValues.id) return false;
-		  stmt.text = "DELETE FROM " + mStoreName + ' WHERE (id IN (' + fieldValues.id + '))';
+		  stmt.text = "DELETE FROM " + mStoreName + 
+		          ' WHERE (id IN (' + fieldValues.id + '))';
 		  try {
 		    stmt.execute();
 		    var result:SQLResult = stmt.getResult();
@@ -344,25 +396,39 @@ package com.memamsa.airdb
 			return fieldValues.hasOwnProperty(name);
 		} 
 		
+		// Returns the value or the association for the given property name
 		override flash_proxy function getProperty(name:*):* {
 			name = name.toString();
 			if (name == 'storeName') return mStoreName;
 						
 			if (fieldValues.hasOwnProperty(name)) {
+			  // this property is part of the known schema, return the fieldvalue.
 				return fieldValues[name];
 			}
 			if (name in associations) {
+			  // if we have previously cached the Associator object corresponding 
+			  // to this property, return the cached object
 				return associations[name];
 			}
 			
+			// look through the association meta-data to see if we support this
+			// named association as a property. 
 			var assocList:XMLList = Reflector.getMetadata(this, "Association");
 			for (var ax:int = 0; ax < assocList.length(); ax++) {
 				var assoc:XML = assocList[ax];
 				if (assoc && assoc.arg.(@key == 'name').@value == name) {
+				  // Found a property with the given name as an association specified
+				  // with that name. Get the corresponding class name that it maps to.
 					var clsName:String = assoc.arg.(@key == 'className').@value;
-					trace('clsName: ' + clsName);
+          /*trace('clsName: ' + clsName);*/
+          
+          // Construct a new Associator to handle the querying and mapping.
+          // The associator needs the class and the relationship type as 
+          // specified in the meta-data. 
 					var klass:Class = flash.utils.getDefinitionByName(clsName) as Class;
 					var aType:String = assoc.arg.(@key == 'type').@value;
+					
+					// create and cache the associator for future use.  
 					associations[name] = new Associator(this, klass, aType);
 					return associations[name]; 
 				}				
