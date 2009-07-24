@@ -156,7 +156,7 @@ package com.memamsa.airdb
 		
 		public function belongsTo(klass:Class):void {
 		  var bfName:String = DB.mapForeignKey(klass);
-		  column(bfName, DB.Field.Integer);
+		  column(bfName, DB.Field.Integer, {'default': 0});
 		}
 	
 	  private function get tableCreated():Boolean {
@@ -173,3 +173,4 @@ package com.memamsa.airdb
 	  }  
 	}
 }
+
