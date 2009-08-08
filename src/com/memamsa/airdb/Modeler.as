@@ -96,7 +96,8 @@ package com.memamsa.airdb
 				if (!fieldValues.hasOwnProperty(key)) {
 					throw new Error(mStoreName + ": Field Unknown: " + key);
 				}
-				clause += key + ' = ' + DB.sqlMap(keyvals[key]);
+				clause += key + ' = :' + key;
+				stmt.parameters[":" + key] = keyvals[key];
 				conditions.push(clause);
 			}
 			stmt.text += conditions.join(' AND ');
@@ -115,6 +116,8 @@ package com.memamsa.airdb
 			} catch (error:SQLError) {
 				trace("ERROR: find: " + error.details);
 				return false;
+			} finally {
+				stmt.clearParameters();
 			}
 			return true;
 		}
@@ -177,10 +180,12 @@ package com.memamsa.airdb
 		    throw new Error("Can't modify or save deleted data");
 		  }
 			if (!values && !newRecord) return false;
+			
 			var key:String;
 			if (!values && newRecord) {
 				values = fieldValues;
 			}
+			
 			for (key in values) {
 				if (!fieldValues.hasOwnProperty(key)) {
 					trace('create: unknown fields specified');
@@ -196,16 +201,15 @@ package com.memamsa.airdb
 			timeStamp('created_at');
 			
 			var cols:Array = [];
-			var vals:Array = [];
 			for (key in fieldValues) {
 				if (!fieldValues[key]) continue;
-			  cols.push(key);
-  			vals.push(DB.sqlMap(fieldValues[key]));  			  
+  			    cols.push(key);
+  			    stmt.parameters[":" + key] = values[key];
 			}
 
 			stmt.text = "INSERT INTO " + mStoreName;			
 			stmt.text += " (" + cols.join(',') + ")";
-			stmt.text += " VALUES (" + vals.join(',') + ")";
+			stmt.text += " VALUES (:" + cols.join(',:') + ")";
 			try {
 				stmt.execute();
 				var result:SQLResult = stmt.getResult();
@@ -216,6 +220,8 @@ package com.memamsa.airdb
 			} catch (error:SQLError) {
 				trace("ERROR: create: " + error.details);
 				return false;
+			} finally {
+				stmt.clearParameters();
 			}
 			recNew = recChanged = false;
 			return true;
@@ -246,14 +252,17 @@ package com.memamsa.airdb
 					changed = true;
 					fieldsChanged[key] = true;
 				}
+				
 			}
 			// The before hooks may change fields using latest values
 			beforeUpdate();
 			beforeSave();
 			if (!validateData()) return false;
+			
 			if (changed) {
 				for (key in fieldsChanged) {
-					assigns.push(key + " = " + DB.sqlMap(fieldValues[key]));
+					assigns.push(key + " = :" + key);
+					stmt.parameters[":" + key] = fieldValues[key];
 				}
 				stmt.text = "UPDATE " + mStoreName + " SET ";
 				stmt.text += assigns.join(',');
@@ -270,7 +279,10 @@ package com.memamsa.airdb
 				} catch (error:SQLError) {
 					trace("Error: update: " + error.details);
 					return false;
+				} finally {
+					stmt.clearParameters();
 				}
+
 				// upon successful update, reflect new values in this object
 				recChanged = false;
 				fieldsChanged = {};
@@ -289,7 +301,7 @@ package com.memamsa.airdb
 					trace('update: unknown field: ' + key);
 					throw new Error(mStoreName + '.updateAll: Field Unknown: ' + key);
 				}
-				assigns.push(key + ' = ' + DB.sqlMap(values[key]));
+				assigns.push(key + ' = ' + values[key]);
 			}
 			stmt.text += assigns.join(',');
 			if (conditions) {
