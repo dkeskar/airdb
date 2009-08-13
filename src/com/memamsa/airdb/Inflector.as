@@ -5,11 +5,33 @@ package com.memamsa.airdb
   * Source: AIR ActiveRecord - 
   * http://code.google.com/p/air-activerecord/source/browse/trunk/src/flight/utils/Inflector.as
   **/
+  
+  /**
+  * Word utilities to help map class names to tables and fields.
+  * 
+  * <p>The <code>Inflector</code> provides for transforming a ClassName into
+  * underscored, humanized or camel-cased forms and vice-versa. It also includes
+  * support for converting to and between singular and plural forms for common 
+  * words.</p>
+  * 
+  * @example Some common examples
+  * <listing version="3.0">
+  * Inflector.underscore("ActionScript"); // "action_script"
+  * Inflector.pluralize("Post");          // "Posts"
+  * </listing>
+  * 
+  * @example The default mapping of a model class to its table
+  * <listing version="3.0">
+  * Inflector.underscore(Inflector.pluralize(className));
+  * </listing>
+  * 
+  * @see DB#mapTable()
+  **/
 	public class Inflector
 	{
 		/**
 		 * Returns the plural version of a word
-		 */
+		 **/
 		public static function pluralize(word:String):String
 		{
 			for each (var rule:Array in pluralRules)

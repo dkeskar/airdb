@@ -1,17 +1,5 @@
 package com.memamsa.airdb
 {
-	/**
-	 * Modeler
-	 * Provides base class functionality for Object Relational Modeling of 
-	 * database tables. Sub-classes of Modeler (models) are automatically
-	 * mapped to database tables, and support data manipulation and query methods
-	 * such as load, create, update, delete, save and findAll.
-	 * 
-	 * The actual schema for the model table is independent of the Modeler. 
-	 * AirDB provides the Migrator class to allow models to dynamically evolve and
-	 * migrate their schema. The Modeler uses the schema information for checking
-	 * field names and optimizing certain operations. 
-	 **/
 	import flash.data.SQLResult;
 	import flash.data.SQLStatement;
 	import flash.errors.SQLError;
@@ -19,7 +7,51 @@ package com.memamsa.airdb
 	import flash.utils.flash_proxy;
 	import flash.utils.getDefinitionByName;
 	import flash.utils.getQualifiedClassName;
-	
+  
+	/**
+	 * The <code>Modeler</code> provides base class functionality for Object 
+	 * Relational Modeling of database tables, fields and operations. Sub-classes
+	 * of <code>Modeler</code> (models) are automatically mapped to tables, and 
+	 * include support for data manipulation and query methods such as load, 
+	 * create, update, delete, save and findAll.
+	 * 
+	 * <p>The actual schema for the model table is specified within the Modeler
+	 * sub-class, using a composite member instance of the <code>Migrator</code> 
+	 * class. This schema information is used for checking field names and 
+	 * optimizing certain operations.</p>
+	 * 
+	 * <p>The model can also define associations with other models. Associations 
+	 * help map table relationships in the database schema (such as many-many, 
+	 * one-many, etc) in terms of model objects and provide a quick and in some 
+	 * cases automated mechanism for querying and finding the associated table 
+	 * records. 
+	 * 
+	 * @example A model to represent a blog Post, each of which has many Comments
+	 * <listing version="3.0">
+	 * [Association(type="has_many", name="comments", className="example.model.Comment")]
+	 * [Association(type="belongs_to", name="author", className="example.model.Person")]
+	 * dynamic class Post extends Modeler
+	 * {
+	 *    private static var schema_migrations:Migrator = new Migrator(
+	 *      Post, 
+	 *      {id: true},
+	 *      [
+	 *        function(my:Migrator):void {
+	 *          my.belongsTo(Person);
+	 *          my.createTable(function():void {
+	 *            my.column('title', DB.Field.VarChar, {limit: 255});
+	 *            my.columnTimeStamps();
+	 *          });
+	 *        }
+	 *      ]
+	 *    );
+	 *    // other class members and methods
+	 * } 
+	 * </listing>
+	 * 
+	 * @see com.memamsa.airdb.Migrator
+	 * @see com.memamsa.airdb.Associator
+	 **/	
 	public class Modeler extends Proxy
 	{
 	  /**
@@ -66,19 +98,40 @@ package com.memamsa.airdb
 			recNew = true;
 		}
 		
-		// Static method to find and load data into an instance of a 
-		// Modeler sub-class. Used to get a particular model object based
-		// on some conditions. 
-		// e.g. if Post extends Modeler
-		// var post:Post = Modeler.findery(Post, {author: 'dude'});
-		//
+		/**
+		* Create an instance of the specified <code>Modeler</code> sub-class and 
+		* load it with the record information matching given key values. 
+		* 
+		* @param klass The classname, which should be a sub class of 
+		* <code>Modeler</code>
+		* 
+		* @param keyvals An Object where the keys correspond to field names and 
+		* values specify the condition to be matched against that field. 
+		* 
+		* @example Find blog Posts by a particular author
+		* <listing version="3.0">
+		* var author:Person = Modeler.findery(Person, {name: 'Cool Dude'});
+		* var post:Post = Modeler.findery(Post, {author_id: author.id});
+		* </listing>
+		* 
+		* @return If there exists a record matching the conditions specified in 
+		* the <code>keyvals</code>, returns an instance of the specified 
+		* <code>Modeler</code> sub-class loaded with the record information. 
+		* Otherwise, returns null.
+		**/
 		public static function findery(klass:Class, keyvals:Object):Modeler {
 		  var obj:Modeler = new klass;
 		  if (!obj.load(keyvals)) return null;
 		  return obj;
 		}
 		
-		// initialize this object to hold fields for a new record. 
+		/**
+		* Initialize this instance with specified field values, potentially for a 
+		* new record. Any existing field information in this instance is reset.
+		* 
+		* @param keyvals An Object where the keys correspond to field names and 
+		* the values to be assigned to them.
+		**/
 		public function data(values:Object):void {
 			if (!values) return;
 			resetFields();			
@@ -94,7 +147,13 @@ package com.memamsa.airdb
 			recNew = true;
 		}
 
-		// save newly initialized or modified data
+    /**
+    * Save the field values in this instance to the database record. 
+    * Creates a new record or updates an existing record appropriately based
+    * on how this instance was loaded or initialized. 
+    * 
+    * @return <code>true</code> on successful save, <code>false</code> otherwise.
+    **/
 		public function save():Boolean {
 		  if (recDeleted) {
 		    throw new Error("Can't modify or save deleted data");
@@ -103,9 +162,15 @@ package com.memamsa.airdb
 			return (newRecord ? create() : update());
 		}
 
-		// finds a record matching specified field values and load
-		// this object properties with field values from the record.
-		// if found returns true 
+    /**
+    * Load this instance with record information matching specified conditions.
+    * 
+    * @param keyvals The conditions, expressed in terms of keys representing 
+    * field names and their associated values to be matched. 
+    * 
+    * @return <code>true</code> if a matching record was found, otherwise 
+    * <code>false</code>.
+    **/
 		public function load(keyvals:Object):Boolean {
 			resetFields();
 			if (!keyvals) return false;
@@ -140,9 +205,74 @@ package com.memamsa.airdb
 			return true;
 		}
 		
-		// Find using query predicates provided
-		// The query object keys supported are the SQL clauses: 
-		// conditions, group, order, limit, joins 
+		/**
+		* Check for the existence of records matching criteria specified in terms 
+		* of field names and associated values. This method <strong>will not change
+		* </strong> the current object state or field values. 
+		* 
+    * @param keyvals The conditions, expressed in terms of keys representing 
+    * field names and their associated values to be matched. 
+    * 
+    * @return <code>true</code> if matching records were found, otherwise 
+    * <code>false</code>.
+    * 
+    * @see Modeler#findAll
+    * @see Modeler#load
+		**/
+		public function find(keyvals:Object):Boolean {
+			if (!keyvals) return false;
+				
+			var conditions:Array = [];
+			stmt.text = "SELECT * FROM " + mStoreName + " WHERE ";
+			for (var key:String in keyvals) {
+				var clause:String = "";
+				if (!fieldValues.hasOwnProperty(key)) {
+					throw new Error(mStoreName + ": Field Unknown: " + key);
+				}
+				clause += key + ' = ' + DB.sqlMap(keyvals[key]);
+				conditions.push(clause);
+			}
+			if (conditions.length <= 0) return false;			
+			stmt.text += conditions.join(' AND ');
+			try {
+				stmt.execute();
+				var result:SQLResult = stmt.getResult();
+				if (!result || !result.data) {
+					return false;
+				}
+				if (result.data.length > 0) {
+				  return true;
+				}
+			} catch (error:SQLError) {
+				trace("ERROR: find: " + error.details);
+				return false;
+			}
+		  return false;
+		}
+		
+		/**
+		* A generic sql-based find method to query and load field information for 
+		* all records based on SQL conditions, ordering and limits including join 
+		* and grouping operations. 
+		* 
+		* @param query An Object whose keys can map to values corresponding 
+		* to the following supported SQL clauses: 
+		* <ul>
+		* <li>select: fields and sub-selects, e.g. *, field as something, etc.</li>
+		* <li>conditions: SQL conditions including AND, OR, etc.</li>
+		* <li>group: field names that follow a GROUP BY</li>
+		* <li>order: describe sorting as in ORDER BY, e.g. "name ASC"</li>
+		* <li>limit: LIMIT clause, e.g. 10</li>
+		* <li>joins: table join claues, e.g. inner join table on ...</li>
+		* </ul>
+		* 
+		* @param page Specify record offset in terms of integer valued pages. 
+		* @default 1
+		* 
+		* @param perPage The number of records to fetch per page
+		* 
+		* @return List of Objects representing the query result. 
+		**/
 		public function findAll(query: Object, page:int=1, perPage:int=0):Array {
 			resetFields();
 			stmt.text = constructSql(query, page, perPage);
@@ -159,6 +289,12 @@ package com.memamsa.airdb
 			return [];	
 		}
 		
+		/**
+		* Count the total number of records in the table for this model.
+		* 
+		* @return The total record count
+		* @see Modeler#countAll
+		**/
 		// Count of the number of records
 		public function count():int {
 			resetFields();
@@ -176,9 +312,22 @@ package com.memamsa.airdb
 			return -1;
 		}
 		
-		// Count the number of reqcords which match query criteria 
-		// The query object accepts the following keys corresponding to SQL clauses.
-		// -> conditions, group, order, limit, joins
+		/**
+		* Count the number of records matching specified query criteria
+		* 
+		* @param query An Object whose keys can map to values corresponding 
+		* to the following supported SQL clauses: 
+		* <ul>
+		* <li>conditions: SQL conditions including AND, OR, etc.</li>
+		* <li>group: field names that follow a GROUP BY</li>
+		* <li>order: describe sorting as in ORDER BY, e.g. "name ASC"</li>
+		* <li>limit: LIMIT clause, e.g. 10</li>
+		* <li>joins: table join claues, e.g. inner join table on ...</li>
+		* </ul>
+		*
+		* @return The count of records matching the query 
+		* @see Modeler#count
+		**/
 		public function countAll(query:Object):int {
 			query.select = "COUNT(*) as count_all";
 			stmt.text = constructSql(query);
@@ -195,9 +344,29 @@ package com.memamsa.airdb
 			return -1;
 		}
 
-		// create a record with given values
-		// The given values, where specified, override the field values stored 
-		// currently in the Modeler object fieldValues. 
+    /**
+    * Create a new record by combining field values in this instance with 
+    * the specified values. 
+    * 
+    * @param keyvals An object containing field names as keys and corresponding
+    * field values. These given values override the field values previously 
+    * stored in the instance. 
+    * 
+    * @return <code>true</code> if new record was successfully created, 
+    * <code>false</code> otherwise. 
+    * 
+    * @example Create the record for a new blog post
+    * <listing version="3.0">
+    * var post:Post = new Post();
+    * post.title = "A new beginning";
+    * post.author_id = 3;
+    * post.create();
+    * 
+    * // Create another post by the same author
+    * post.create({title: "A continuing saga"});
+    * </listing>
+    * 
+    **/
 		public function create(values:Object=null):Boolean {
 		  if (recDeleted) {
 		    throw new Error("Can't modify or save deleted data");
@@ -249,9 +418,30 @@ package com.memamsa.airdb
 			return true;
 		}
 		
-		// Update the database record for the currently loaded object to 
-		// reflect any changed values, including those specified as parameters 
-		// to this method.
+		/**
+		* Update the database record currently loaded into the model object. 
+		* Only updates changed fields or those for which new values are provided.
+		* 
+    * @param keyvals An object containing field names as keys and corresponding
+    * field values. These given values override the field values previously 
+    * stored in the instance. 
+    * 
+    * @return <code>true</code> if record was successfully updated, 
+    * <code>false</code> otherwise. 
+		* 
+		* @see Modeler#save
+		* @see Modeler#updateAll
+		* @see Modeler#create
+		* 
+		* @example Update a person's karma score
+		* <listing version="3.0">
+		* var user:Person = Modeler.findery(Person, {id: 7});
+		* user.update({karma: user.karma + 20});
+		* </listing>
+		**/
+		// TODO: Fix this method to ensure it cannot accidentally UPDATE everything. 
+		// This means, if rec is not loaded, it cannot be updated. 
+		// Use updateAll when updating all records. 
 		public function update(values:Object=null):Boolean {
 		  if (recDeleted) {
 		    throw new Error("Can't modify or save deleted data"); 
@@ -319,10 +509,24 @@ package com.memamsa.airdb
 			return true;
 		}
 		
-		// Update all records matching conditions
-		// Returns the number of records updated 
-		// Use SQL-style condition and update clauses. 
-		// e.g. updateAll("some <> XY AND foo LIKE '%nice%'", "bar = 'value'")
+		/**
+		* Update all records matching specified conditions with new values
+		* 
+		* @param conditions A set of conditions in valid SQL syntax
+		* 
+		* @param keyvals An Object with keys representing field names and the
+		* associated values as updated values. 
+		* 
+		* @return A count of the number of rows that were updated
+		* 
+		* @see Modeler#update
+		* 
+		* @example Add keyword string to all posts about SQLite
+		* <listing version="3.0">
+		* var post:Post = new Post();
+		* post.updateAll("title like '%sql%'", {keywords: "sql,database"});
+		* </listing>
+		**/
 		public function updateAll(conditions:String, values:Object):uint {
 			resetFields();
 			stmt.text = "UPDATE " + mStoreName + " SET ";
@@ -353,7 +557,14 @@ package com.memamsa.airdb
 			return 0;
 		}
 		
-		// Delete this record
+		/**
+		* Deletes the record represented by this object. The model object must
+		* have previously been "loaded" with a record. 
+		* 
+		* @return <code>true</code> if record was successfully deleted, 
+		* <code>false</code> otherwise. 
+		* 
+		**/
 		public function remove():Boolean {
 		  // If there is no id field for this table, we have no basis to remove.
 		  // It is assumed that the object has been loaded with the record we 
@@ -364,7 +575,7 @@ package com.memamsa.airdb
 		  try {
 		    stmt.execute();
 		    var result:SQLResult = stmt.getResult();
-		    if (!result || !result.data) {
+		    if (!result || !result.complete || result.rowsAffected != 1) {
 		      trace('DELETE failed');
 		      return false;
 		    }
@@ -377,26 +588,54 @@ package com.memamsa.airdb
 		}
 		
 		/**
-		* Overridable functions for validation and automatic actions 
-		**/
-		// called when Modeler.save() called, whether new or existing
+		* Overridable method called before saving a newly created or updated reord. 
+		* @see Modeler#save
+		* @see Modeler#beforeCreate
+		* @see Modeler#beforeUpdate
+		**/		
 		protected function beforeSave():void {}
-		// called before INSERT for new records
+		
+		/**
+		* Overridable method called before inserting new records. 
+		* @see Modeler#save
+		* @see Modeler#beforeSave
+		* @see Modeler#beforeUpdate
+		**/		
 		protected function beforeCreate():void {}
-		// called before UPDATE (and after beforeSave)
+		
+  	/**
+  	* Overridable method called before update of existing records. Invoked
+  	* <strong>after</strong> the <code>beforeSave()</code> callback. 
+  	* @see Modeler#save
+  	* @see Modeler#beforeSave
+  	* @see Modeler#beforeCreate
+  	**/		
 		protected function beforeUpdate():void {}
-		// Called before save or create. If false, aborts DB operation
+
+  	/**
+  	* Overridable method called before save or create to allow validation of 
+  	* field data. Set the return value to control whether to abort or proceed
+  	* with the save or create operation. 
+  	*  
+  	* @return Upon <code>false</code> result, the triggering save or create is
+  	* aborted. Return <code>true</code> to allow processing of valid data. 
+  	* @see Modeler#save
+  	* @see Modeler#beforeSave
+  	* @see Modeler#beforeCreate
+  	**/		
 		protected function validateData():Boolean {return true;}
 		
 		/** 
-		 * Property Overrides to handle column names and associations 
+		 * @internal Property Overrides to handle column names and associations 
 		 **/
 		override flash_proxy function hasProperty(name:*):Boolean {
 			// TODO: also check associations meta-data
 			return fieldValues.hasOwnProperty(name);
 		} 
 		
-		// Returns the value or the association for the given property name
+		/**
+		* @internal Returns the value or the association for the given property name
+		**/
 		override flash_proxy function getProperty(name:*):* {
 			name = name.toString();
 			if (name == 'storeName') return mStoreName;
@@ -436,7 +675,10 @@ package com.memamsa.airdb
 			
 			return undefined;
 		}
-		
+
+		/**
+		* @internal
+		**/
 		override flash_proxy function setProperty(name:*, value:*):void {
 		  if (recDeleted) {
 		    throw new Error("Can't modify or save deleted data"); 
@@ -450,12 +692,19 @@ package com.memamsa.airdb
 			}			
 		}
 		
+		/**
+		* @internal
+		**/
 		override flash_proxy function callProperty(name:*, ...args):* {
 			var matchSyntax:Array = name.toString().match(/^([a-z]+)(.+)/);
 			
 			return false;
 		}
 		
+		/**
+		* Returns the unqualified class name for the model. 
+		* @return The model name, suitable for mapping to tables.
+		**/
 		public function get className():String {
 			var name:String = flash.utils.getQualifiedClassName(this);
 			var cp:Array = name.split('::');
@@ -463,9 +712,21 @@ package com.memamsa.airdb
 			return name;			
 		} 
 		
+		/**
+		* Check if object has unsaved changes
+		* @return <code>true</code> if new or changed record information
+		**/
 		public function get unsaved():Boolean {
 			return (recNew || recChanged);
 		}
+    
+    /**
+    * Check if this object fields represent a new record
+    * @return <code>true</code> if this is a new record
+    **/
+		public function get newRecord():Boolean {
+		  return (recNew || !fieldValues['id']);
+		}	
 
 		/**
 		 * Private Helpers and Operations Support
@@ -501,11 +762,7 @@ package com.memamsa.airdb
 		  }			
 			return sqs;
 		}
-		
-		public function get newRecord():Boolean {
-		  return (recNew || !fieldValues['id']);
-		}	
-			 
+					 
 		// reset all fields (empty object)
 		// Prior changes are discarded.
 		protected function resetFields():void	{

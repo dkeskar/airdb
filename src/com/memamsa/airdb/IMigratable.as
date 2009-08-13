@@ -1,22 +1,37 @@
 package com.memamsa.airdb
 {
   /** 
-  * IMigratable interface specifies the methods which a migratable
-  * object must implement. 
+  * IMigratable methods must be implemented by a migratable object. 
   * 
   * The DB invokes these IMigratable methods to ensure schema migration.
-  * 
   **/
 	public interface IMigratable
 	{
-	  // Return the table name 
+	  /**
+	  * Return the table name 
+	  **/
 		function get storeName():String;
 		
-		// Runs specified migration directives. 
-		// Migrations are numbered from zero. 
-		// If the toVer is unspecified (0), all migrations are run.
-		// Returns a number indicating the total migration directives applied, 
-		// which forms the basis, if necessary, for next version to start from.
+		/**
+    * Run the necessary migration directives to bring the schema for the
+    * corresponding database table up-to-date. The N migration directives
+    * specified during instantiation of this <code>Migrator</code> are
+    * numbered as versions from 0 to N-1
+    * 
+    * @param fromVer Starting schema version for this table. 
+    * @default 0, begin from the first directive.
+    * 
+    * @param toVer Desired ending version for the schema. 
+    * @default 0, in which case all directives upto the last are applied.
+    * 
+    * @return The final schema version after necessary migration directives
+    * have been applied. This forms the starting version, if necessary, for 
+    * the next set of migrations.
+    * 
+  	* @see Migrator
+  	* @see DB#migrate
+    * 
+    **/    
 		function migrate(fromVer:uint=0, toVer:uint=0):uint;
 	}
 }

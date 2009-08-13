@@ -7,35 +7,64 @@ package com.memamsa.airdb
 	import flash.utils.flash_proxy;
 	
 	/**
-	*  Associator
-	*  Manages the load of associated objects that map DB relationships into 
-	*  object aggregation with support for chaining method invocations.
+	*  The <code>Associator</code> transparently maps schema relationships into
+	*  object aggregations. 
 	*  
-	*  Facilitates object relational modeling of schema relationships such as 
-	*  "has-many", "belongs-to", "many-many". For example: 
+	*  <p>The <code>Modeler</code> automatically creates appropriate Associators 
+	*  using class meta-data. The Associator provides methods for creating and
+	*  querying associations between table rows (including through join tables). 
+	*  Where necessary, the Associator maps method calls directly to the target 
+	*  model, on which additional methods can be invoked.</p>
 	*  
-	*  post belongs-to author and author has-many comments: 
-	*  post.author.comments.list();
+	*  <p>The Associator includes support for the following relationships:
+	*  <ul>
+	*  <li><strong>has_many</strong>: Maps a foreign key for this table into the 
+	*  <strong>belongs_to</strong>  counter-part.</li>
+	*  <li><strong>has_and_belongs_to_many</strong>: Creates a join table 
+	*  mapping the corresponding foreign keys</li>
+	*  <li><strong>belongs_to</strong> Specifies the foreign key in this table 
+	*  for mapping the association</li>
+	*  </ul>
+	*  </p>
 	*  
-	*  Several associations can be specified as Class meta-data in the package
-	*  with the following format: 
-	*  
+	*  <p>Multiple Associations can be specified as class meta-data in the package, 
+	*  with the following format. 
+	*  <pre>
 	*  [Association(name="aname", className="cname", type="atype")]  
 	*  
 	*  where:
 	*     aname = the name by which the association is invoked (e.g. "comments")
 	*     cname = FQN of the associated class, e.g. com.example.model.Comment
 	*     atype = Association type, e.g. "has_many"
+	*  </pre>
+	*  <strong>Requires</strong> compiler setting of 
+	*  <code>-keep-as3-metadata+=Association</code>
+	*  </p>
+	*  
+	*  @example A blog Post belongs-to author and has-many comments: 
+	*  <listing version="3.0">
+	*  package example.model {
+ 	*   [Association(type="has_many", name="comments", className="example.model.Comment")]
+ 	*   [Association(type="belongs_to", name="author", className="example.model.Person")]
+	*   dynamic class Post extends Modeler {
+	*   }
+	*  }
+	*  var post:Post = Modeler.findery(Post, {id: 3});
+	*  trace(post.author.name);
+	*  // Find comments since 2009-08-01
+	*  post.comments.findAll({
+	*     select: "*, strftime("%Y-%m-%d, created_at) as cd", 
+	*     conditions: "cd > '2009-08-01'"
+	*  });
+	*  </listing>
+	*  
 	**/
 	public class Associator extends Proxy
 	{
-	  // String names and const mappings for supported association types
-		public static const Map:Object = {
-			has_and_belongs_to_many : DB.Has.AndBelongsToMany,
-			has_one: DB.Has.One,
-			has_many: DB.Has.Many,
-			belongs_to: DB.Has.BelongsTo
-		};
+	  public static const HAS_AND_BELONGS_TO_MANY:String = "has_and_belongs_to_many";
+    public static const HAS_ONE:String = "has_one";
+    public static const HAS_MANY:String = "has_many";
+    public static const BELONGS_TO:String = "belongs_to";
 		
 		// Associator maps a source property to a target object
 		// Invoked methods are handled by the Associator itself or passed onto 
@@ -43,16 +72,27 @@ package com.memamsa.airdb
 		// 
 		private var mySource:Modeler;   // source invoking association as property
 		private var myTarget:Modeler;   // target object whose methods are invoked
-		private var myType:uint;        // association type
+		private var myType:String;      // association type
 		private var joinTable:String;   // for has_and_belongs_to_many
 		private var mPropName:String;		// association name as property of source
 		private var targetForeignKey:String;    // foreign key for target model
 		private var sourceForeignKey:String;    // join table foreign key for source
 		private var targetStoreName:String;     // table name for target
 		
-		// Construct an associator. 
-		// The source and targets are Modeler objects, although the target is 
-		// specified just via the classname.
+		/**
+		* Construct an associator to map between two models representing database
+		* tables. The source is the subject and the target is the object of the
+		* relationship. e.g. If a customers has-many orders, then Customer is the
+		* source and Order is the target. 
+		* 
+		* @param source A model (sub-class of <code>Modeler</code>) 
+		* <strong>object</strong> which is the subject (source) of the assocation. 
+		* 
+		* @param target A <code>Modeler</code> derived <strong>class</strong> 
+		* as the target of the association. 
+		* 
+		* @param type The association type. 
+		**/
 		public function Associator(source:Modeler, target:Class, type:String) {
 		  // store information and generated mappings
 			mySource = source;
@@ -60,9 +100,9 @@ package com.memamsa.airdb
 			targetForeignKey = DB.mapForeignKey(target);
 			targetStoreName = DB.mapTable(target);
 			
-			myType = Associator.Map[type];
+			myType = type;
 			try {
-			  if (myType == DB.Has.BelongsTo) {
+			  if (myType == BELONGS_TO) {
 			    // Find the specific target corresponding to this source object. 
 			    myTarget = Modeler.findery(target, {id: mySource[targetForeignKey]});
 			  } else {
@@ -74,55 +114,101 @@ package com.memamsa.airdb
 				trace('Associator ERROR instantiating target class');
 			}
 			
-			if (myType == DB.Has.AndBelongsToMany) {
+			if (myType == HAS_AND_BELONGS_TO_MANY) {
 			  // for many-many associations, we note the join table for efficiently
 			  // constructing queries later. 
 				joinTable = DB.mapJoinTable(source, target);
 			}
 		}
 		
+		/**
+		* Get the table name for the association target 
+		**/
 		public function get target():String {
 			return targetStoreName;
 		}
 		
-		// returns a count of the number of associated objects
+		/**
+		* Count the number of associated objects. 
+		**/
 		public function get count():int {
 			if (!mySource['id']) return 0;
-			if (myType == DB.Has.One || myType == DB.Has.BelongsTo) {
+			if (myType == HAS_ONE || myType == BELONGS_TO) {
 				return 1;
 			}
-			if (myType == DB.Has.AndBelongsToMany) {
+			if (myType == HAS_AND_BELONGS_TO_MANY) {
 				var query:Object = construct_query();
 				return myTarget.countAll(query);
 			}
 			return -1;
 		}
 		
-		// returns a list of all target objects, with order and limit as specified.
-		// intended as a quick syntactic way to say "list" 
-		// use findAll directly if you need to limit the results by conditions, etc. 
+		/**
+		* List all target objects. Equivalent to findAll({})
+		* 
+		* @see Associator#findAll
+		**/
 		public function list(params:Object = null):Array {
 			if (!params) params = {};
 			return findAll(params);
 		}
 		
-		// find objects with specified query params provided as predicates
-		// allowable keys: select, joins, conditions, order, limit  
+		/**
+		* Query associated objects
+		* 
+		* A generic sql-based find method to query and load field information for 
+		* all records based on SQL conditions, ordering and limits including join 
+		* and grouping operations. 
+		* 
+		* @param query An Object whose keys can map to values corresponding 
+		* to the following supported SQL clauses: 
+		* <ul>
+		* <li>select: fields and sub-selects, e.g. *, field as something, etc.</li>
+		* <li>conditions: SQL conditions including AND, OR, etc.</li>
+		* <li>group: field names that follow a GROUP BY</li>
+		* <li>order: describe sorting as in ORDER BY, e.g. "name ASC"</li>
+		* <li>limit: LIMIT clause, e.g. 10</li>
+		* <li>joins: table join claues, e.g. inner join table on ...</li>
+		* </ul>
+		* 
+		* @return List of Objects representing the query result.
+		* 
+		* @see Modeler#findAll
+		* 
+		**/
 		public function findAll(query:Object):Array {
 			if (!mySource['id']) return [];
-			if (myType == DB.Has.AndBelongsToMany) {
+			if (myType == HAS_AND_BELONGS_TO_MANY) {
 				var query:Object = construct_query(query);
 				return myTarget.findAll(query);
-			} else if (myType == DB.Has.Many) {
+			} else if (myType == HAS_MANY) {
 			  return myTarget.findAll({conditions: sourceForeignKey + '=' + mySource['id']});
 			}
 			return [];
 		}
 		
-		// add specified object(s) to the associated set of objects
-		// The object to be added can be specified either by its primary id
-		// or by providing the actual Modeler sub-class object
-		// By default, if an association exists, duplicates are not added. 
+		/**
+		* Create an association between the source and the specified target object.
+		* Saves the source and the target if either of them are new records. 
+		* 
+		* @param obj The target object to be associated with this source model. 
+		* This can be an object of a <code>Modeler</code> sub-class or an integer
+		* which is interpreted as the <strong>id</strong> field value for the target.
+		* 
+		* @param noDups Specifies whether duplicate associations are disallowed, 
+		* particularly for <code>has_and_belongs_to_many</code> associations. 
+		* @default true, which means no duplicates. 
+		* 
+		* @return <code>true</code> if association was successfully made, otherwise
+		* <code>false</code>.
+		* 
+		* @example Add another comment to a blog post. 
+		* <listing version="3.0">
+		* var post:Post = Modeler.findery(Post, {id: 1});
+		* // Push (and saves) new comment
+		* post.comments.push(new Comment({title: '1st', text: 'i wuz here'}));
+		* </listing>
+		**/
 		public function push(obj:*, noDups:Boolean = true):Boolean {
 		  // prepare source and target
 		  var targetId:int = 0;
@@ -135,7 +221,7 @@ package com.memamsa.airdb
 			if (obj is Modeler) {
 			  if (obj.className != myTarget.className) return false;
 			  // H-M with object specified is taken care of right here.
-		    if (myType == DB.Has.Many && obj[sourceForeignKey] != mySource['id']) {
+		    if (myType == HAS_MANY && obj[sourceForeignKey] != mySource['id']) {
 		      obj[sourceForeignKey] = mySource['id'];
 		      return obj.save(); 
 		    }			  
@@ -149,9 +235,9 @@ package com.memamsa.airdb
 			  targetId = obj;
 			}			
 			
-			if (myType == DB.Has.AndBelongsToMany) {
+			if (myType == HAS_AND_BELONGS_TO_MANY) {
 			  return find_or_create(mySource['id'], targetId, noDups);
-			} else if (myType == DB.Has.Many) {
+			} else if (myType == HAS_MANY) {
 			  var rc:int = 0;
 			  rc = myTarget.updateAll('id = ' + targetId, sourceForeignKey + ' = ' + mySource['id']);
 			  return (rc == 1) ? true : false;
@@ -192,10 +278,27 @@ package com.memamsa.airdb
 			return false;
 		}
 		
+		/** 
+		* Remove an association which the given object might have with this
+		* source. 
+		* 
+		* @param obj The target object(s) to be dis-associated from this source model. 
+		* The parameter can be: 
+		* <ul>
+		* <li>A single object instance of a <code>Modeler</code> sub-class</li>
+		* <li>An <code>Array</code> of <code>Modeler</code> objects</li>
+		* <li>An integer as the <strong>id</strong> field value for the target</li>
+		* <li>An <code>Array</code> of target ids</li>
+		* </ul>
+		* 
+		* @return <code>true</code> if association was successfully made, otherwise
+		* <code>false</code>.
+		* 
+		**/
 		// remove the specified object from the associated set
 		// provide either the actual object or simply its primary key.
 		public function remove(obj:*):Boolean {
-			if (myType == DB.Has.AndBelongsToMany) {
+			if (myType == HAS_AND_BELONGS_TO_MANY) {
 				if (obj is Modeler && obj.className != myTarget.className) return false;
 				var ids:Array = [];
 				if (obj is Modeler) {
@@ -226,17 +329,17 @@ package com.memamsa.airdb
 		}
 		
 		override flash_proxy function hasProperty(name:*):Boolean {
-			if (myType == DB.Has.BelongsTo) return myTarget.hasOwnProperty(name);
+			if (myType == BELONGS_TO) return myTarget.hasOwnProperty(name);
 			return false;
 		} 
 		
 		override flash_proxy function getProperty(name:*):* {
-		  if (myType == DB.Has.BelongsTo) return myTarget[name];
+		  if (myType == BELONGS_TO) return myTarget[name];
 			return undefined;
 		}
 		
 		override flash_proxy function setProperty(name:*, value:*):void {
-		  if (myType == DB.Has.BelongsTo) myTarget[name] = value;
+		  if (myType == BELONGS_TO) myTarget[name] = value;
 		}
 		
 		override flash_proxy function callProperty(name:*, ...args):* {
