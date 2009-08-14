@@ -73,6 +73,7 @@ package com.memamsa.airdb
 		private var mySource:Modeler;   // source invoking association as property
 		private var myTarget:Modeler;   // target object whose methods are invoked
 		private var myType:String;      // association type
+		private var targetKlass:Class;	// class of the target
 		private var joinTable:String;   // for has_and_belongs_to_many
 		private var mPropName:String;		// association name as property of source
 		private var targetForeignKey:String;    // foreign key for target model
@@ -96,6 +97,7 @@ package com.memamsa.airdb
 		public function Associator(source:Modeler, target:Class, type:String) {
 		  // store information and generated mappings
 			mySource = source;
+			targetKlass = target;
 			sourceForeignKey = DB.mapForeignKey(source);
 			targetForeignKey = DB.mapForeignKey(target);
 			targetStoreName = DB.mapTable(target);
@@ -105,6 +107,10 @@ package com.memamsa.airdb
 			  if (myType == BELONGS_TO) {
 			    // Find the specific target corresponding to this source object. 
 			    myTarget = Modeler.findery(target, {id: mySource[targetForeignKey]});
+			  } else if (myType == HAS_ONE) {
+			    var keyval:Object = new Object();
+			    keyval[sourceForeignKey] = mySource['id'];
+			    myTarget = Modeler.findery(target, keyval);
 			  } else {
 			    // In other cases, we just need a generic target model on which we 
 			    // can invoke appropriate query operations.
@@ -129,6 +135,62 @@ package com.memamsa.airdb
 		}
 		
 		/**
+		* Set the target for HAS_ONE or BELONGS_TO associations. 
+		* 
+		* @param obj The <code>Modeler</code> sub-class object that is the target
+		* of this association.
+		* 
+		* @example Change the author for a blog post
+		* <listing version="3.0">
+		* // post belongs_to author 
+		* var post:Post = Modeler.findery(Post, {id: 3});
+		* var user:User = Modeler.findery(User, {name: 'someuser'});
+		* post.author = user;
+		* </listing>
+		**/
+		public function set target(obj:*):void {
+		  if (myType == HAS_MANY || myType == HAS_AND_BELONGS_TO_MANY) {
+		    throw new Error(myType + ': Cannot directly set target. Use push');
+		  }		  
+		  if (!(obj is Modeler)) {
+		    throw new Error('Associator#target=. Expect Modeler ' + obj);
+		  }
+		  if (!(obj is targetKlass)) {
+		    throw new Error(myType + ':' + targetKlass + " Unexpected target " + obj);
+		  }
+		  // HAS_ONE and BELONGS_TO target, if it exists is not automatically 
+		  // overridden
+		  if (myTarget) {
+		    throw new Error(myType + ': target exists. Explicitly remove()');
+		  }
+		  if (myType == HAS_ONE) {
+		    if (!mySource['id'] && mySource.unsaved) mySource.save();
+		    if (!mySource['id']) {
+		      throw new Error(myType + ":" + targetStoreName + ': source ID unknown');
+		    }
+	      obj[sourceForeignKey] = mySource['id'];
+	      obj.save();
+	      
+	      var keyval:Object = new Object();
+	      keyval[sourceForeignKey] = mySource['id'];
+	      myTarget = Modeler.findery(targetKlass, keyval);
+	      
+		  } else if (myType == BELONGS_TO) {
+		    if (!obj['id'] && obj.unsaved) obj.save();
+		    if (!obj['id']) {
+		      throw new Error(myType + ":" + targetStoreName + ": target ID unknown");
+		    }
+		    mySource[targetForeignKey] = obj['id'];
+		    mySource.save();
+		    
+		    myTarget = Modeler.findery(targetKlass, {id: obj['id']});
+		  }
+      if (!myTarget) {
+        throw new Error(myType + ' Setting target failed');
+      }		  
+		}
+		
+		/**
 		* Count the number of associated objects. 
 		**/
 		public function get count():int {
@@ -139,6 +201,10 @@ package com.memamsa.airdb
 			if (myType == HAS_AND_BELONGS_TO_MANY) {
 				var query:Object = construct_query();
 				return myTarget.countAll(query);
+			}
+			if (myType == HAS_MANY) {
+			  var cond:String = sourceForeignKey + '=' + mySource['id'];
+			  return myTarget.countAll({conditions:cond});
 			}
 			return -1;
 		}
@@ -210,6 +276,11 @@ package com.memamsa.airdb
 		* </listing>
 		**/
 		public function push(obj:*, noDups:Boolean = true):Boolean {
+		  // cannot push in case of one-one or belongs-to
+		  // Use setProperty via "=" operator
+		  if (myType == HAS_ONE || myType == BELONGS_TO) {
+		    throw new Error(myType + ":Cannot push. Set properties directly");
+		  }
 		  // prepare source and target
 		  var targetId:int = 0;
 		  
@@ -298,6 +369,9 @@ package com.memamsa.airdb
 		// remove the specified object from the associated set
 		// provide either the actual object or simply its primary key.
 		public function remove(obj:*):Boolean {
+		  if (myType == HAS_ONE || myType == BELONGS_TO) {
+		    return myTarget.remove();
+		  }
 			if (myType == HAS_AND_BELONGS_TO_MANY) {
 				if (obj is Modeler && obj.className != myTarget.className) return false;
 				var ids:Array = [];
@@ -329,17 +403,19 @@ package com.memamsa.airdb
 		}
 		
 		override flash_proxy function hasProperty(name:*):Boolean {
-			if (myType == BELONGS_TO) return myTarget.hasOwnProperty(name);
-			return false;
+			if (myType == BELONGS_TO || myType == HAS_ONE) {
+			  return myTarget.hasOwnProperty(name);
+		  } 
+		  return false;  			
 		} 
 		
 		override flash_proxy function getProperty(name:*):* {
-		  if (myType == BELONGS_TO) return myTarget[name];
+		  if (myType == BELONGS_TO || myType == HAS_ONE) return myTarget[name];
 			return undefined;
 		}
 		
 		override flash_proxy function setProperty(name:*, value:*):void {
-		  if (myType == BELONGS_TO) myTarget[name] = value;
+		  if (myType == BELONGS_TO || myType == HAS_ONE) myTarget[name] = value;
 		}
 		
 		override flash_proxy function callProperty(name:*, ...args):* {

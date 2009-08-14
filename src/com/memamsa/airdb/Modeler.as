@@ -644,6 +644,10 @@ package com.memamsa.airdb
 			  // this property is part of the known schema, return the fieldvalue.
 				return fieldValues[name];
 			}
+			return findAssociation(name);			
+		}
+		
+		private function findAssociation(name:String):Associator {
 			if (name in associations) {
 			  // if we have previously cached the Associator object corresponding 
 			  // to this property, return the cached object
@@ -671,9 +675,8 @@ package com.memamsa.airdb
 					associations[name] = new Associator(this, klass, aType);
 					return associations[name]; 
 				}				
-			} 
-			
-			return undefined;
+			} 			
+			return undefined;		  
 		}
 
 		/**
@@ -688,7 +691,12 @@ package com.memamsa.airdb
 				recChanged = true;
 				fieldsChanged[name] = true;		
 			} else {
-				throw new Error("Unknown Property: " + name);
+			  var assoc:Associator = findAssociation(name);
+			  if (assoc) {
+			    assoc.target = value;
+			  } else {
+  				throw new Error("Unknown Property: " + name);			    
+			  }			  
 			}			
 		}
 		
