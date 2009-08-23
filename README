@@ -1,11 +1,8 @@
-ActionScript ORM for AIR apps. 
+ActionScript ORM for using SQLite in AIR apps. 
 Supports ActiveRecord style models, migrations and associations. 
 
-NOTE: It works, mostly. As of today, this project lacks many things: 
-1) Tests
-2) Library packaging
-3) Documentation
+ASDoc package documentation available at http://airdb.memamsa.com
 
-I will post design and development updates here: 
-http://blog.memamsa.com/category/airdb
+Design and development updates at: http://blog.memamsa.com/category/airdb
 
+Help us write stand-alone unit and functional tests for the AirDB package. 
