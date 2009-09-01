@@ -93,6 +93,7 @@ package com.memamsa.airdb
 			for each (var fname:* in model.prototype.fieldNames) {
 				fieldValues[fname] = null;
 			}
+			fieldValues['_rowid'] = null;
 			// set this to be a newly initialized object. 
 			// this allows new ModelClass() to be used for creating new record
 			recNew = true;
@@ -176,7 +177,7 @@ package com.memamsa.airdb
 			if (!keyvals) return false;
 				
 			var conditions:Array = [];
-			stmt.text = "SELECT * FROM " + mStoreName + " WHERE ";
+			stmt.text = "SELECT ROWID as _rowid, * FROM " + mStoreName + " WHERE ";
 			for (var key:String in keyvals) {
 				var clause:String = "";
 				if (!fieldValues.hasOwnProperty(key)) {
@@ -203,6 +204,18 @@ package com.memamsa.airdb
 				return false;
 			}
 			return true;
+		}
+		
+		/**
+		* Reload this previously loaded instance to obtain latest field values. 
+		* All unsaved changes are lost. 
+		* @return <code>true</code> if reload was successful, <code>false</code>
+		* otherwise.
+		**/
+		public function reload():Boolean {
+		  if (!fieldValues.hasOwnProperty('_rowid') || 
+		      !fieldValues['_rowid']) return false;
+		  return load({_rowid: fieldValues['_rowid']});
 		}
 		
 		/**
@@ -407,7 +420,10 @@ package com.memamsa.airdb
 				stmt.execute();
 				var result:SQLResult = stmt.getResult();
 				if (result && result.complete) {
-					fieldValues['id'] = result.lastInsertRowID;
+					fieldValues['_rowid'] = result.lastInsertRowID;
+					if (fieldValues.hasOwnProperty('id')) {
+					  fieldValues['id'] = fieldValues['_rowid'];
+					}
     			recLoaded = true;					
 				}
 			} catch (error:SQLError) {
@@ -451,6 +467,10 @@ package com.memamsa.airdb
 			if (!values && newRecord) {
 			  throw new Error(mStoreName + ".update: Expected create");
 		  }
+		  // records must be loaded before they can be updated
+		  if (!(fieldValues.hasOwnProperty('_rowid') && fieldValues['_rowid'])) {
+		    throw new Error(mStoreName + ".update: No record loaded");
+		  }
 
 			var assigns:Array = [];
 			var key:String;
@@ -462,10 +482,11 @@ package com.memamsa.airdb
 					trace('update: unknown field: ' + key);
 					throw new Error(mStoreName + '.update: Field Unknown: ' + key);
 				}
-				// Assumption: If there exists an 'id' field for this model, 
-				// then the id field value CANNOT be modified directly in update. 
-				// We simply ignore attempts to set the 'id' field value.
-				if (values[key] && fieldValues[key] != values[key] && key != 'id') {
+				// UNENFORCED: If there exists an 'id' field for this model, 
+				// then the id field value should not be modified directly in update. 
+				// We DO NOT prevent setting or modifying the 'id' field value.
+				
+				if (values[key] && fieldValues[key] != values[key]) {
 					fieldValues[key] = values[key];
 					// Note down field names that have changed (for efficient update)
 					changed = true;
@@ -487,19 +508,13 @@ package com.memamsa.airdb
 				stmt.text = "UPDATE " + mStoreName + " SET ";
 				stmt.text += assigns.join(',');
 				
-				// Assumption: we use the 'id' field to ensure that this specific
-				// record is updated. If there is not an 'id' field for the model, 
-				// the UPDATE will apply to all records. 
-				// The ID is either from the fieldValues previously populated with a 
-				// load() or by using the id key in the values passed to this method. 
-				if (recLoaded || (values && values.hasOwnProperty('id'))) {
-					stmt.text += " WHERE id = " + 
-					        ((values && values['id']) || fieldValues['id']).toString(); 
-				}
+				// We use the SQLite ROWID integer key to ensure that this specific
+				// record (previosly loaded) is the one that is updated. 
+				stmt.text += " WHERE ROWID = " + fieldValues['_rowid'];
 				try {
 					stmt.execute();
 				} catch (error:SQLError) {
-					trace("Error: update: " + error.details);
+					trace(stmt.text + "\nError: Update: " + error.details);
 					return false;
 				}
 				// upon successful update, reflect new values in this object
@@ -545,11 +560,11 @@ package com.memamsa.airdb
 			try {
 				stmt.execute();
 				var result:SQLResult = stmt.getResult();
-				if (!result || !result.data || !result.data.rowsAffected) {
+				if (!result || !result.rowsAffected) {
 					trace('updateAll: update failed');
 					return 0;
 				}
-				return result.data.rowsAffected;				
+				return result.rowsAffected;				
 			} catch (error:SQLError) {
 				trace('Error: updateAll: ' + error.details);
 				return 0;
@@ -733,7 +748,7 @@ package com.memamsa.airdb
     * @return <code>true</code> if this is a new record
     **/
 		public function get newRecord():Boolean {
-		  return (recNew || !fieldValues['id']);
+		  return (recNew || !fieldValues['_rowid']);
 		}	
 
 		/**

@@ -130,8 +130,8 @@ package com.memamsa.airdb
 		/**
 		* Get the table name for the association target 
 		**/
-		public function get target():String {
-			return targetStoreName;
+		public function get target():* {
+			return myTarget as targetKlass;
 		}
 		
 		/**
@@ -196,7 +196,7 @@ package com.memamsa.airdb
 		public function get count():int {
 			if (!mySource['id']) return 0;
 			if (myType == HAS_ONE || myType == BELONGS_TO) {
-				return 1;
+			  return ((typeof(myTarget) != 'undefined' && myTarget) ? 1 : 0);
 			}
 			if (myType == HAS_AND_BELONGS_TO_MANY) {
 				var query:Object = construct_query();
