@@ -794,13 +794,18 @@ package com.memamsa.airdb
 				fieldValues[key] = null;
 			}
 			resetState();
+			resetAssociations();
 		}
 		
 		// reset the state - extreme - use with caution
 		protected function resetState():void {
 			recNew = recLoaded = recChanged = recDeleted = false;
 		} 
-
+		
+		// reset all associations
+		protected function resetAssociations():void {
+		  associations = {}
+		}
 		
  		protected function timeStamp(field:String, values:Object=null):void {
 			if (fieldValues.hasOwnProperty(field)) {
