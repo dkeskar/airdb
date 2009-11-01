@@ -291,11 +291,12 @@ package com.memamsa.airdb
 				if (value.length > 0) return "'" + value + "'";
 				if (value.length == 0) return '';
 			} else if (value is Date) {
+			  // store the local date/time as 'YYYY-mm-dd HH:MM:SS'
 				var rstr:String = "";
 				var extr:Array = [
-					'fullYearUTC', 'monthUTC', 'dateUTC', 
+					'fullYear', 'month', 'date', 
 					null,
-					'hoursUTC', 'minutesUTC', 'secondsUTC', 
+					'hours', 'minutes', 'seconds', 
 					null
 				] 
 				var dstr:Array = [];
@@ -305,7 +306,7 @@ package com.memamsa.airdb
 					var s:String;
 					if (extr[ix]) {
 						d = value[extr[ix]];
-						d += (extr[ix] == 'monthUTC') ? 1 : 0;
+						d += (extr[ix] == 'month') ? 1 : 0;
 						s = (d < 10) ? "0" + d.toString() : d.toString();
 						dstr.push(s);
 					} else {

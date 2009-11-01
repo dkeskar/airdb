@@ -6,3 +6,10 @@ ASDoc package documentation available at http://airdb.memamsa.com
 Design and development updates at: http://blog.memamsa.com/category/airdb
 
 Help us write stand-alone unit and functional tests for the AirDB package. 
+
+= Release Notes, New or Changed Functionality = 
+
+== 20090831 ==
+* Uses local machine time while mapping Date for DATETIME fields
+* Modeler#update only updates if a record was previously loaded into object.
+* Added Modeler#reload to refresh object using latest record values. 

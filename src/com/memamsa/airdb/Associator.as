@@ -130,8 +130,8 @@ package com.memamsa.airdb
 		/**
 		* Get the table name for the association target 
 		**/
-		public function get target():String {
-			return targetStoreName;
+		public function get target():* {
+			return myTarget as targetKlass;
 		}
 		
 		/**
@@ -196,7 +196,7 @@ package com.memamsa.airdb
 		public function get count():int {
 			if (!mySource['id']) return 0;
 			if (myType == HAS_ONE || myType == BELONGS_TO) {
-				return 1;
+			  return ((typeof(myTarget) != 'undefined' && myTarget) ? 1 : 0);
 			}
 			if (myType == HAS_AND_BELONGS_TO_MANY) {
 				var query:Object = construct_query();
@@ -373,25 +373,35 @@ package com.memamsa.airdb
 		    return myTarget.remove();
 		  }
 			if (myType == HAS_AND_BELONGS_TO_MANY) {
-				if (obj is Modeler && obj.className != myTarget.className) return false;
+				if (obj is Modeler && 
+				  obj.className != myTarget.className &&
+				  obj.className != mySource.className) {
+				  throw new Error(myType + '.remove: Not an associated source or target');
+				}
+				var anchorCond:String = sourceForeignKey + ' = ' + mySource['id'];
+				var toDelete:String;
 				var ids:Array = [];
-				if (obj is Modeler) {
-					ids.push(obj['id']);
-				} else if (obj is Array) {
-					for (var ix:int; ix < obj.length; ix++) {
-						var ao:* = obj[ix];
-						if (ao is Modeler && ao['className'] == myTarget.className) {
-							ids.push(ao['id']);
-						} else if (ao is int || ao is uint) {
-							ids.push(ao);
-						}
+				if (obj is Modeler && obj.className == mySource.className) {
+				  toDelete = "";
+				} else {
+				  anchorCond += ' AND ' + targetForeignKey;
+				  if (obj is Modeler) {
+  				  ids.push(obj['id']);
+  				} else if (obj is Array) {
+  					for (var ix:int; ix < obj.length; ix++) {
+  						var ao:* = obj[ix];
+  						if (ao is Modeler && ao['className'] == myTarget.className) {
+  							ids.push(ao['id']);
+  						} else if (ao is int || ao is uint) {
+  							ids.push(ao);
+  						}
+  					}
 					}
+					toDelete = ' IN (' + ids.join(',') + ')';
 				}
 				var stmt:SQLStatement = new SQLStatement();
 				stmt.sqlConnection = DB.getConnection();
-				stmt.text = "DELETE FROM " + joinTable + " WHERE " + 
-					sourceForeignKey + ' = ' + mySource['id'] + ' AND ' + 
-					targetForeignKey + ' IN (' + ids.join(',') + ')';
+				stmt.text = "DELETE FROM " + joinTable + " WHERE " + anchorCond + toDelete;
 				try {
 					stmt.execute();
 					return true;				

@@ -93,6 +93,7 @@ package com.memamsa.airdb
 			for each (var fname:* in model.prototype.fieldNames) {
 				fieldValues[fname] = null;
 			}
+			fieldValues['_rowid'] = null;
 			// set this to be a newly initialized object. 
 			// this allows new ModelClass() to be used for creating new record
 			recNew = true;
@@ -176,14 +177,13 @@ package com.memamsa.airdb
 			if (!keyvals) return false;
 				
 			var conditions:Array = [];
-			stmt.text = "SELECT *, ROWID FROM " + mStoreName + " WHERE ";
+			stmt.text = "SELECT ROWID as _rowid, * FROM " + mStoreName + " WHERE ";
 			for (var key:String in keyvals) {
 				var clause:String = "";
 				if (!fieldValues.hasOwnProperty(key)) {
 					throw new Error(mStoreName + ": Field Unknown: " + key);
 				}
-				clause += key + ' = :' + key;
-				stmt.parameters[":" + key] = keyvals[key];
+				clause += key + ' = ' + DB.sqlMap(keyvals[key]);
 				conditions.push(clause);
 			}
 			stmt.text += conditions.join(' AND ');
@@ -202,10 +202,20 @@ package com.memamsa.airdb
 			} catch (error:SQLError) {
 				trace("ERROR: find: " + error.details);
 				return false;
-			} finally {
-				stmt.clearParameters();
 			}
 			return true;
+		}
+		
+		/**
+		* Reload this previously loaded instance to obtain latest field values. 
+		* All unsaved changes are lost. 
+		* @return <code>true</code> if reload was successful, <code>false</code>
+		* otherwise.
+		**/
+		public function reload():Boolean {
+		  if (!fieldValues.hasOwnProperty('_rowid') || 
+		      !fieldValues['_rowid']) return false;
+		  return load({_rowid: fieldValues['_rowid']});
 		}
 		
 		/**
@@ -375,12 +385,10 @@ package com.memamsa.airdb
 		    throw new Error("Can't modify or save deleted data");
 		  }
 			if (!values && !newRecord) return false;
-			
 			var key:String;
 			if (!values && newRecord) {
 				values = fieldValues;
 			}
-			
 			// Apply specified values to ensure all fieldValues are the latest.
 			for (key in values) {
 				if (!fieldValues.hasOwnProperty(key)) {
@@ -398,27 +406,29 @@ package com.memamsa.airdb
 			timeStamp('created_at');
 			
 			var cols:Array = [];
+			var vals:Array = [];
 			for (key in fieldValues) {
 				if (!fieldValues[key]) continue;
-  			    cols.push(key);
-  			    stmt.parameters[":" + key] = values[key];
+			  cols.push(key);
+  			vals.push(DB.sqlMap(fieldValues[key]));  			  
 			}
 
 			stmt.text = "INSERT INTO " + mStoreName;			
 			stmt.text += " (" + cols.join(',') + ")";
-			stmt.text += " VALUES (:" + cols.join(',:') + ")";
+			stmt.text += " VALUES (" + vals.join(',') + ")";
 			try {
 				stmt.execute();
 				var result:SQLResult = stmt.getResult();
 				if (result && result.complete) {
-					fieldValues['id'] = result.lastInsertRowID;
+					fieldValues['_rowid'] = result.lastInsertRowID;
+					if (fieldValues.hasOwnProperty('id')) {
+					  fieldValues['id'] = fieldValues['_rowid'];
+					}
     			recLoaded = true;					
 				}
 			} catch (error:SQLError) {
 				trace("ERROR: create: " + error.details);
 				return false;
-			} finally {
-				stmt.clearParameters();
 			}
 			recNew = recChanged = false;
 			return true;
@@ -457,6 +467,10 @@ package com.memamsa.airdb
 			if (!values && newRecord) {
 			  throw new Error(mStoreName + ".update: Expected create");
 		  }
+		  // records must be loaded before they can be updated
+		  if (!(fieldValues.hasOwnProperty('_rowid') && fieldValues['_rowid'])) {
+		    throw new Error(mStoreName + ".update: No record loaded");
+		  }
 
 			var assigns:Array = [];
 			var key:String;
@@ -468,16 +482,16 @@ package com.memamsa.airdb
 					trace('update: unknown field: ' + key);
 					throw new Error(mStoreName + '.update: Field Unknown: ' + key);
 				}
-				// Assumption: If there exists an 'id' field for this model, 
-				// then the id field value CANNOT be modified directly in update. 
-				// We simply ignore attempts to set the 'id' field value.
-				if (values[key] && fieldValues[key] != values[key] && key != 'id') {
+				// UNENFORCED: If there exists an 'id' field for this model, 
+				// then the id field value should not be modified directly in update. 
+				// We DO NOT prevent setting or modifying the 'id' field value.
+				
+				if (values[key] && fieldValues[key] != values[key]) {
 					fieldValues[key] = values[key];
 					// Note down field names that have changed (for efficient update)
 					changed = true;
 					fieldsChanged[key] = true;
 				}
-				
 			}
 			// Invoke overridable before-update, before-save and validateData hooks.
 			// These hooks get to perform validation or computation using the latest
@@ -488,36 +502,21 @@ package com.memamsa.airdb
 			
 			// Carry out the DB UPDATE if things actually have changed
 			if (changed) {
-
 				for (key in fieldsChanged) {
-					assigns.push(key + " = :" + key);
-					stmt.parameters[":" + key] = fieldValues[key];
+					assigns.push(key + " = " + DB.sqlMap(fieldValues[key]));
 				}
 				stmt.text = "UPDATE " + mStoreName + " SET ";
 				stmt.text += assigns.join(',');
 				
-				// Assumption: we use the 'id' field to ensure that this specific
-				// record is updated. If there is not an 'id' field for the model, 
-				// the UPDATE will apply to all records. 
-				// The ID is either from the fieldValues previously populated with a 
-				// load() or by using the id key in the values passed to this method. 
-				if (recLoaded || values) {
-					if ((values && values.hasOwnProperty('id')) || (fieldValues && fieldValues.hasOwnProperty('id'))) {
-						stmt.text += " WHERE id = " + ((values && values['id']) || fieldValues['id']).toString();
-					} else if (values && values.hasOwnProperty('rowid') || (fieldValues && fieldValues.hasOwnProperty('rowid'))) {
-						stmt.text += " WHERE ROWID = " + ((values && values['rowid']) || fieldValues['rowid']).toString();
-					}
-				}
-				
+				// We use the SQLite ROWID integer key to ensure that this specific
+				// record (previosly loaded) is the one that is updated. 
+				stmt.text += " WHERE ROWID = " + fieldValues['_rowid'];
 				try {
 					stmt.execute();
 				} catch (error:SQLError) {
-					trace("Error: update: " + error.details);
+					trace(stmt.text + "\nError: Update: " + error.details);
 					return false;
-				} finally {
-					stmt.clearParameters();
 				}
-
 				// upon successful update, reflect new values in this object
 				recChanged = false;
 				fieldsChanged = {};
@@ -552,7 +551,7 @@ package com.memamsa.airdb
 					trace('update: unknown field: ' + key);
 					throw new Error(mStoreName + '.updateAll: Field Unknown: ' + key);
 				}
-				assigns.push(key + ' = ' + values[key]);
+				assigns.push(key + ' = ' + DB.sqlMap(values[key]));
 			}
 			stmt.text += assigns.join(',');
 			if (conditions) {
@@ -561,11 +560,11 @@ package com.memamsa.airdb
 			try {
 				stmt.execute();
 				var result:SQLResult = stmt.getResult();
-				if (!result || !result.data || !result.data.rowsAffected) {
+				if (!result || !result.rowsAffected) {
 					trace('updateAll: update failed');
 					return 0;
 				}
-				return result.data.rowsAffected;				
+				return result.rowsAffected;				
 			} catch (error:SQLError) {
 				trace('Error: updateAll: ' + error.details);
 				return 0;
@@ -749,7 +748,7 @@ package com.memamsa.airdb
     * @return <code>true</code> if this is a new record
     **/
 		public function get newRecord():Boolean {
-		  return (recNew || !fieldValues['id']);
+		  return (recNew || !fieldValues['_rowid']);
 		}	
 
 		/**
@@ -795,13 +794,18 @@ package com.memamsa.airdb
 				fieldValues[key] = null;
 			}
 			resetState();
+			resetAssociations();
 		}
 		
 		// reset the state - extreme - use with caution
 		protected function resetState():void {
 			recNew = recLoaded = recChanged = recDeleted = false;
 		} 
-
+		
+		// reset all associations
+		protected function resetAssociations():void {
+		  associations = {}
+		}
 		
  		protected function timeStamp(field:String, values:Object=null):void {
 			if (fieldValues.hasOwnProperty(field)) {
