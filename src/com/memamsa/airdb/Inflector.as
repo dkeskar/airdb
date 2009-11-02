@@ -168,13 +168,9 @@ package com.memamsa.airdb
 			[/status$/i, "status"],
 			[/children$/i, "child"],
 			[/news$/i, "news"],
-<<<<<<< HEAD:src/com/memamsa/airdb/Inflector.as
 			[/s$/i, ""],
-			[/media$/i, "media"]
-=======
 			[/media$/i, "media"],
 			[/s$/i, ""]
->>>>>>> 7d122d3bc521cee4df6a28ebef5344f324a05795:src/com/memamsa/airdb/Inflector.as
 		];
 	}
 }

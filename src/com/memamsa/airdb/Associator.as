@@ -1,4 +1,4 @@
-package com.memamsa.airdb
+package com.memamsa.airdb 
 {
 	import flash.data.SQLResult;
 	import flash.data.SQLStatement;
@@ -61,10 +61,10 @@ package com.memamsa.airdb
 	**/
 	public class Associator extends Proxy
 	{
-	  public static const HAS_AND_BELONGS_TO_MANY:String = "has_and_belongs_to_many";
-    public static const HAS_ONE:String = "has_one";
-    public static const HAS_MANY:String = "has_many";
-    public static const BELONGS_TO:String = "belongs_to";
+	    public static const HAS_AND_BELONGS_TO_MANY:String = "has_and_belongs_to_many";
+	    public static const HAS_ONE:String = "has_one";
+	    public static const HAS_MANY:String = "has_many";
+	    public static const BELONGS_TO:String = "belongs_to";
 		
 		// Associator maps a source property to a target object
 		// Invoked methods are handled by the Associator itself or passed onto 
@@ -296,7 +296,9 @@ package com.memamsa.airdb
 		      obj[sourceForeignKey] = mySource['id'];
 		      return obj.save(); 
 		    }			  
-			  if (obj.unsaved) obj.save();
+			  if (obj.unsaved) {
+			  	obj.save();
+			  }
 			  if (!obj['id']) {
 			    throw new Error(targetStoreName + ": target has no id");
 			  }
