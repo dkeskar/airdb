@@ -298,12 +298,20 @@ package com.memamsa.airdb
 				if (!result || !result.data) {
 					return [];
 				}
-				
-				return convertObjectsToThisType(result.data);
+				return result.data;
 			} catch (error:SQLError) {
 				trace('ERROR:findall: ' + error.details);
 			}
 			return [];	
+		}
+		
+		/**
+		* A front-end to findAll method 
+		* Returns objects of the appropriate Model type
+		**/
+		public function getAll(query: Object, page:int=1, perPage:int=0):Array {
+			var obj:Array = findAll(query, page, perPage);
+			return convertObjectsToThisType(obj);
 		}
 		
 		/**
