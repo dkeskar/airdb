@@ -444,12 +444,12 @@ package com.memamsa.airdb
 		* Update the database record currently loaded into the model object. 
 		* Only updates changed fields or those for which new values are provided.
 		* 
-    * @param keyvals An object containing field names as keys and corresponding
-    * field values. These given values override the field values previously 
-    * stored in the instance. 
-    * 
-    * @return <code>true</code> if record was successfully updated, 
-    * <code>false</code> otherwise. 
+		* @param keyvals An object containing field names as keys and corresponding
+		* field values. These given values override the field values previously 
+		* stored in the instance. 
+		* 
+		* @return <code>true</code> if record was successfully updated, 
+		* <code>false</code> otherwise. 
 		* 
 		* @see Modeler#save
 		* @see Modeler#updateAll
@@ -621,7 +621,7 @@ package com.memamsa.airdb
 		* @see Modeler#beforeUpdate
 		**/		
 		protected function beforeSave():void {}
-		
+
 		/**
 		* Overridable method called before inserting new records. 
 		* @see Modeler#save
@@ -629,27 +629,27 @@ package com.memamsa.airdb
 		* @see Modeler#beforeUpdate
 		**/		
 		protected function beforeCreate():void {}
-		
-  	/**
-  	* Overridable method called before update of existing records. Invoked
-  	* <strong>after</strong> the <code>beforeSave()</code> callback. 
-  	* @see Modeler#save
-  	* @see Modeler#beforeSave
-  	* @see Modeler#beforeCreate
-  	**/		
+
+		/**
+		* Overridable method called before update of existing records. Invoked
+		* <strong>after</strong> the <code>beforeSave()</code> callback. 
+		* @see Modeler#save
+		* @see Modeler#beforeSave
+		* @see Modeler#beforeCreate
+		**/		
 		protected function beforeUpdate():void {}
 
-  	/**
-  	* Overridable method called before save or create to allow validation of 
-  	* field data. Set the return value to control whether to abort or proceed
-  	* with the save or create operation. 
-  	*  
-  	* @return Upon <code>false</code> result, the triggering save or create is
-  	* aborted. Return <code>true</code> to allow processing of valid data. 
-  	* @see Modeler#save
-  	* @see Modeler#beforeSave
-  	* @see Modeler#beforeCreate
-  	**/		
+		/**
+		* Overridable method called before save or create to allow validation of 
+		* field data. Set the return value to control whether to abort or proceed
+		* with the save or create operation. 
+		*  
+		* @return Upon <code>false</code> result, the triggering save or create is
+		* aborted. Return <code>true</code> to allow processing of valid data. 
+		* @see Modeler#save
+		* @see Modeler#beforeSave
+		* @see Modeler#beforeCreate
+		**/		
 		protected function validateData():Boolean {return true;}
 		
 		/** 
@@ -762,10 +762,10 @@ package com.memamsa.airdb
 			return (recNew || recChanged);
 		}
     
-    /**
-    * Check if this object fields represent a new record
-    * @return <code>true</code> if this is a new record
-    **/
+		/**
+		* Check if this object fields represent a new record
+		* @return <code>true</code> if this is a new record
+		**/
 		public function get newRecord():Boolean {
 		  return (recNew || !fieldValues['_rowid']);
 		}	
