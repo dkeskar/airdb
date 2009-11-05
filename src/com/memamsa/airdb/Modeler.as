@@ -553,15 +553,16 @@ package com.memamsa.airdb
 		**/
 		public function updateAll(conditions:String, values:Object):uint {
 			resetFields();
-			stmt.text = "UPDATE " + mStoreName + " SET ";
 			var assigns:Array = [];
 			for (var key:String in values) {
 				if (!fieldValues.hasOwnProperty(key)) {
 					trace('update: unknown field: ' + key);
 					throw new Error(mStoreName + '.updateAll: Field Unknown: ' + key);
 				}
-				assigns.push(key + ' = ' + values[key]);
+				assigns.push(key + ' = :' + key);
+				stmt.parameters[':' + key] = values[key];
 			}
+			stmt.text = "UPDATE " + mStoreName + " SET ";			
 			stmt.text += assigns.join(',');
 			if (conditions) {
 				stmt.text += " WHERE " + conditions;
@@ -577,6 +578,8 @@ package com.memamsa.airdb
 			} catch (error:SQLError) {
 				trace('Error: updateAll: ' + error.details);
 				return 0;
+			}	finally {
+				stmt.clearParameters();
 			}
 			return 0;
 		}
