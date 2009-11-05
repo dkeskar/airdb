@@ -148,8 +148,7 @@ package com.memamsa.airdb
 			[/child$/i, "children"],				// child
 			[/media$/i, "media"],
 			[/s$/i, "s"],							// no change (compatibility)
-			[/$/, "s"],
-			[/media$/i, "media"]
+			[/$/, "s"]
 		];
 		
 		protected static var singularRules:Array = [
@@ -168,7 +167,6 @@ package com.memamsa.airdb
 			[/status$/i, "status"],
 			[/children$/i, "child"],
 			[/news$/i, "news"],
-			[/s$/i, ""],
 			[/media$/i, "media"],
 			[/s$/i, ""]
 		];
