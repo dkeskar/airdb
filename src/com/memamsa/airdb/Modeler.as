@@ -183,7 +183,8 @@ package com.memamsa.airdb
 				if (!fieldValues.hasOwnProperty(key)) {
 					throw new Error(mStoreName + ": Field Unknown: " + key);
 				}
-				clause += key + ' = ' + DB.sqlMap(keyvals[key]);
+				clause += key + ' = :' + key;
+				stmt.parameters[":" + key] = keyvals[key];
 				conditions.push(clause);
 			}
 			stmt.text += conditions.join(' AND ');
@@ -202,6 +203,8 @@ package com.memamsa.airdb
 			} catch (error:SQLError) {
 				trace("ERROR: find: " + error.details);
 				return false;
+			} finally {
+				stmt.clearParameters();
 			}
 			return true;
 		}
@@ -295,7 +298,8 @@ package com.memamsa.airdb
 				if (!result || !result.data) {
 					return [];
 				}
-				return result.data;
+				
+				return convertObjectsToThisType(result.data);
 			} catch (error:SQLError) {
 				trace('ERROR:findall: ' + error.details);
 			}
@@ -409,13 +413,13 @@ package com.memamsa.airdb
 			var vals:Array = [];
 			for (key in fieldValues) {
 				if (!fieldValues[key]) continue;
-			  cols.push(key);
-  			vals.push(DB.sqlMap(fieldValues[key]));  			  
+  			    cols.push(key);
+  			    stmt.parameters[":" + key] = values[key];
 			}
-
+			
 			stmt.text = "INSERT INTO " + mStoreName;			
 			stmt.text += " (" + cols.join(',') + ")";
-			stmt.text += " VALUES (" + vals.join(',') + ")";
+			stmt.text += " VALUES (:" + cols.join(',:') + ")";
 			try {
 				stmt.execute();
 				var result:SQLResult = stmt.getResult();
@@ -429,6 +433,8 @@ package com.memamsa.airdb
 			} catch (error:SQLError) {
 				trace("ERROR: create: " + error.details);
 				return false;
+			} finally {
+				stmt.clearParameters();
 			}
 			recNew = recChanged = false;
 			return true;
@@ -503,7 +509,8 @@ package com.memamsa.airdb
 			// Carry out the DB UPDATE if things actually have changed
 			if (changed) {
 				for (key in fieldsChanged) {
-					assigns.push(key + " = " + DB.sqlMap(fieldValues[key]));
+					assigns.push(key + " = :" + key);
+					stmt.parameters[":" + key] = fieldValues[key];
 				}
 				stmt.text = "UPDATE " + mStoreName + " SET ";
 				stmt.text += assigns.join(',');
@@ -516,6 +523,8 @@ package com.memamsa.airdb
 				} catch (error:SQLError) {
 					trace(stmt.text + "\nError: Update: " + error.details);
 					return false;
+				} finally {
+					stmt.clearParameters();
 				}
 				// upon successful update, reflect new values in this object
 				recChanged = false;
@@ -551,7 +560,7 @@ package com.memamsa.airdb
 					trace('update: unknown field: ' + key);
 					throw new Error(mStoreName + '.updateAll: Field Unknown: ' + key);
 				}
-				assigns.push(key + ' = ' + DB.sqlMap(values[key]));
+				assigns.push(key + ' = ' + values[key]);
 			}
 			stmt.text += assigns.join(',');
 			if (conditions) {
@@ -644,8 +653,15 @@ package com.memamsa.airdb
 		 * @internal Property Overrides to handle column names and associations 
 		 **/
 		override flash_proxy function hasProperty(name:*):Boolean {
-			// TODO: also check associations meta-data
-			return fieldValues.hasOwnProperty(name);
+			var hasProperty:Boolean = fieldValues.hasOwnProperty(name);
+			if (!hasProperty) {
+				var associator:Associator = findAssociation(name);
+				if (associator) {
+					hasProperty = true;
+				}
+			}
+
+			return hasProperty;
 		} 
 		
 		/**
@@ -815,6 +831,28 @@ package com.memamsa.airdb
 					fieldValues[field] = new Date();
 				}
 			}
+		}
+		
+		private function convertObjectsToThisType(objects:Array):Array {
+			var thisTypeArray:Array = new Array();
+			var klass:Class;
+			try {
+				klass = flash.utils.getDefinitionByName(getQualifiedClassName(this)) as Class;
+			} catch (error:Error) {
+				klass = flash.utils.getDefinitionByName("com.memamsa.airdb.Modeler") as Class;
+			}
+			for each (var object:Object in objects) {
+				var thisTypeObject:Object = new klass;
+				for (var propertyName:String in object) {
+					try {
+						thisTypeObject[propertyName] = object[propertyName];
+					// ignore errors, not all properties can be set.
+					} catch (error:Error) {}
+				}
+				thisTypeArray.push(thisTypeObject);
+			}
+			
+			return thisTypeArray;
 		}
 	}
 }
