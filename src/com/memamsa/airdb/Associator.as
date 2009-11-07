@@ -256,7 +256,7 @@ package com.memamsa.airdb
 		}
 		
 		public function setAttr(keyvals:Object, target:* = Associator.ALL):int {
-			if (!myType == HAS_AND_BELONGS_TO_MANY) {
+			if (myType != HAS_AND_BELONGS_TO_MANY) {
 				throw new Error(myType + '. Join table attributes unsupported');
 			}
 			var sql:String = "UPDATE " + joinTable + " SET ";
@@ -274,7 +274,7 @@ package com.memamsa.airdb
 		}
 		
 		public function getAttr(name:String, target:*):Array {
-			if (!myType == HAS_AND_BELONGS_TO_MANY) {
+			if (myType != HAS_AND_BELONGS_TO_MANY) {
 				throw new Error(myType + '. Join table attributes unsupported');
 			}
 			var sql:String = "SELECT " + name + " FROM " + joinTable;
@@ -287,7 +287,7 @@ package com.memamsa.airdb
 		}
 		
 		public function countByAttr(keyvals:*, target:* = Associator.ALL):int {
-			if (!myType == HAS_AND_BELONGS_TO_MANY) {
+			if (myType != HAS_AND_BELONGS_TO_MANY) {
 				throw new Error(myType + '. Join table attributes unsupported');
 			}
 			var sql:String = "SELECT COUNT(*) as count FROM " + joinTable;
