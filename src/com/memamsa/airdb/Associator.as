@@ -66,6 +66,8 @@ package com.memamsa.airdb
 		public static const HAS_MANY:String = "has_many";
 		public static const BELONGS_TO:String = "belongs_to";
 		
+		public static const ALL:int = 0;
+		
 		// Associator maps a source property to a target object
 		// Invoked methods are handled by the Associator itself or passed onto 
 		// the target object methods
@@ -253,6 +255,75 @@ package com.memamsa.airdb
 			return [];
 		}
 		
+		public function setAttr(keyvals:Object, target:* = Associator.ALL):int {
+			if (!myType == HAS_AND_BELONGS_TO_MANY) {
+				throw new Error(myType + '. Join table attributes unsupported');
+			}
+			var sql:String = "UPDATE " + joinTable + " SET ";
+			var uc:Array = [];
+			for (var key:String in keyvals) {
+				uc.push(key + '=' + DB.sqlMap(keyvals[key]));
+			}
+			sql += uc.join(', ');
+			sql += joinConditions({}, target);
+			var result:SQLResult = DB.execute(sql);
+			if (!result || !result.rowsAffected) {
+				throw new Error('setAttr. Update failed');
+			}
+			return result.rowsAffected;
+		}
+		
+		public function getAttr(name:String, target:*):Array {
+			if (!myType == HAS_AND_BELONGS_TO_MANY) {
+				throw new Error(myType + '. Join table attributes unsupported');
+			}
+			var sql:String = "SELECT " + name + " FROM " + joinTable;
+			sql += joinConditions({}, target);
+			var result:SQLResult = DB.execute(sql);
+			if (result && result.data && result.data.length >= 1) {
+				return result.data[0][name];
+			}
+			return null;
+		}
+		
+		public function countByAttr(keyvals:*, target:* = Associator.ALL):int {
+			if (!myType == HAS_AND_BELONGS_TO_MANY) {
+				throw new Error(myType + '. Join table attributes unsupported');
+			}
+			var sql:String = "SELECT COUNT(*) as count FROM " + joinTable;
+			sql += joinConditions(keyvals, target);
+			var result:SQLResult = DB.execute(sql);
+			if (result && result.data && result.data.length >= 1) {
+				return result.data[0].count;
+			} 
+			return -1;
+		}
+		
+		private function joinConditions(keyvals:*, target:*):String {			
+			if (mySource.unsaved) mySource.save();
+			if (!mySource['id']) {
+				throw new Error(targetStoreName + ': Source ID is unknown');
+			}			
+			var conditions:String = " WHERE ";
+			conditions += '(' + sourceForeignKey + " = " + mySource['id'] + ')';
+			if (keyvals is Object) {
+				var cond:Array = [];
+				for (var key:String in keyvals) {
+					cond.push('(' + key + " = " + DB.sqlMap(keyvals[key]) + ')');
+				}
+				if (cond.length > 0) {
+					conditions += ' AND ' + cond.join(' AND ');
+				}
+			} else if (keyvals is String) {
+				conditions += ' AND ' + keyvals;
+			}
+			if (target && target is Modeler) target = target.id;
+			if (target && target is Number && target != Associator.ALL) {
+				conditions += ' AND (' + targetForeignKey + ' = ' + target + ')'; 
+			}
+			return conditions;
+		}
+		
 		/**
 		* Create an association between the source and the specified target object.
 		* Saves the source and the target if either of them are new records. 
@@ -422,15 +493,18 @@ package com.memamsa.airdb
 		} 
 		
 		override flash_proxy function getProperty(name:*):* {
-		  if (myType == BELONGS_TO || myType == HAS_ONE) return myTarget[name];
+			if (myType == BELONGS_TO || myType == HAS_ONE) return myTarget[name];
 			return undefined;
 		}
 		
 		override flash_proxy function setProperty(name:*, value:*):void {
-		  if (myType == BELONGS_TO || myType == HAS_ONE) myTarget[name] = value;
+			if (myType == BELONGS_TO || myType == HAS_ONE) myTarget[name] = value;
 		}
 		
 		override flash_proxy function callProperty(name:*, ...args):* {
+			if (myType == BELONGS_TO || myType == HAS_ONE) {
+				return myTarget[name.toString()].apply(myTarget, args);
+			}
 			return false;
 		}
 		

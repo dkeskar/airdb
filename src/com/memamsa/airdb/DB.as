@@ -8,7 +8,9 @@ package com.memamsa.airdb
 	import flash.events.SQLEvent;
 	import flash.filesystem.File;
 	import flash.utils.getQualifiedClassName;
-	
+	import flash.data.SQLStatement;
+	import flash.data.SQLResult;
+		
 	/**
 	*  DB constants, helpers and utilities. 
 	*  
@@ -463,5 +465,28 @@ package com.memamsa.airdb
 			}
 			return Inflector.lowerFirst(cls) + '_id';			
 		}				
+		
+		/**
+		* Specify a SQL statement to be executed directly 
+		* 
+		* @param sql A valid SQL statement 
+		* 
+		* @return A SQLResult
+		**/
+		public static function execute(sql:String):SQLResult {
+			if (!dbInit) {
+				throw new Error('DB not inited');
+			}
+			var stmt:SQLStatement = new SQLStatement();
+			stmt.sqlConnection = DB.getConnection();
+			stmt.text = sql;
+			try {
+				stmt.execute();
+			} catch (error:SQLError) {
+				trace('ERROR: ' + error.details);
+				return null;
+			}
+			return stmt.getResult();			
+		}
 	}
 }
