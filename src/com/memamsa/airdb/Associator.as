@@ -255,6 +255,67 @@ package com.memamsa.airdb
 			return [];
 		}
 		
+		/**
+		* Set attributes on the association. 
+		* 
+		* Associations of type has_and_belongs_to_many can have attributes as
+		* part of the mapping between the source and target models. Use setAttr
+		* to set the values for these attributes, either for a single target
+		* or for all of the many targets associated with the source.
+		* 
+		* @example A blog Post has many Tags and a Tag is associated with many Post
+		* A logged in reader (User) can vote on the tagggings for the post. We can
+		* track the vote counts for each tagging
+		* 
+		* [Association type="has_and_belongs_to_many" name="tags" class="example.Tag"]
+		* dynamic public class Post extends Modeler {
+		* 		private static var migrations:Migrator = new Migrator(
+		*				Post, {id: true}, 
+		*				[
+		*					function(my:Migrator):void {
+		*						my.createTable(function():void {
+		*							my.column('name', DB.Field.VarChar, {limit: 255});
+		*							my.columnTimestamps();
+		*						});
+		*					}, 
+		*					function(my:Migrator):void {
+		*						var tagVotesCol:Array = ['votes', DB.Field.Integer, {
+		*							'default': 1}
+		*						];					
+		*						my.joinTable(Photo, [tagVotesCol]);
+		*					},
+		*				]
+		* 		)
+		* }
+		* // Push as usual to create a new association and corresponding join row
+		* var post:Post = new Post();
+		* var flex:Tag = new Tag().find({name: 'flex'});
+		* post.tags.push(flex);
+		* 
+		* // Update the votes for a given for some post
+		* numVotes = post.tags.getAttrVal('votes', flex.id);		
+		* post.tags.setAttr({votes: numVotes + 1}, flex.id);
+		* 
+		* // Reset the votes for all tags for a given post
+		* post.tags.setAttr({votes: 1});
+		*
+		* @param keyvals An Object whose keys map to the column names for the join
+		* table attributes. The corresponding values are used to update the fields
+		* for the matching join table record(s).
+		* 
+		* @param target A Modeler object or an Integer rowID to match a specific
+		* join table row. This value is used to match the foreign key field 
+		* corresponding to the association target. Implicit in the call to this 
+		* method is the source, since the method was invoked via the source object
+		* for the association. 
+		* @default ALL Acts on all the targets associated with the source.
+		* 
+		* @return The number of join table rows updated. 
+		* 
+		* @see Migrator#joinTable
+		* @see findAllByAttr
+		* @see countAllByAttr
+		**/
 		public function setAttr(keyvals:Object, target:* = Associator.ALL):int {
 			if (myType != HAS_AND_BELONGS_TO_MANY) {
 				throw new Error(myType + '. Join table attributes unsupported');
@@ -273,7 +334,48 @@ package com.memamsa.airdb
 			return result.rowsAffected;
 		}
 		
-		public function getAttr(name:String, target:*):Array {
+		/**
+		* Find all association targets with matching association attributes.
+		* 
+		* Associations of type has_and_belongs_to_many can have attributes as
+		* part of the mapping between the source and target models. Use this 
+		* method to find all associated targets matching the specified 
+		* association attributes.
+		* 
+		* @param keyvals An Object whose keys map to the column names for the join
+		* table attributes, and whose values specify the conditions for the field 
+		* values in the query. 
+		* 
+		* @see setAttr
+		* @see countAllByAttr
+		* @see Migrator#joinTable		
+		**/
+		public function findAllByAttr(keyvals:Object):Array {
+			if (myType != HAS_AND_BELONGS_TO_MANY) {
+				throw new Error(myType + '. Join table attributes unsupported');
+			}
+			var cond:String = "SELECT " + targetForeignKey + " FROM " + joinTable;
+			cond += joinConditions(keyvals, ALL);
+			return myTarget.findAll({
+				conditions: 'id in (' + cond + ')'
+			});
+		}
+		
+		/**
+		* Get the value for a given attribute for a specific target 
+		*
+		* @param name The attribute name
+		* 
+		* @param target The Modeler object, or Integer id for a specific
+		* target. Implicit in the call is a particular source object, thus 
+		* defining a particular association corresponding to a single row in
+		* the join table. 
+		* 
+		* @return The value for the association attribute.
+		* 
+		* @see setAttr
+		**/
+		public function getAttrVal(name:String, target:*):* {
 			if (myType != HAS_AND_BELONGS_TO_MANY) {
 				throw new Error(myType + '. Join table attributes unsupported');
 			}
@@ -286,6 +388,21 @@ package com.memamsa.airdb
 			return null;
 		}
 		
+		/** 
+		* Count the number of associated targets matching specified criteria.
+		* 
+		* @param keyvals An Object whose key-value pairs specify column names
+		* and their field values in the join table. 
+		* 
+		* @target A Modeler or Integer to specify a particular association 
+		* target. Possible return values in such a case can be 0 or 1. 
+		* 
+		* @return An integer count. 
+		* 
+		* @see setAttr
+		* @see findAllByAttr
+		* @see Migrator#joinTable		
+		**/
 		public function countByAttr(keyvals:*, target:* = Associator.ALL):int {
 			if (myType != HAS_AND_BELONGS_TO_MANY) {
 				throw new Error(myType + '. Join table attributes unsupported');
@@ -299,6 +416,7 @@ package com.memamsa.airdb
 			return -1;
 		}
 		
+		// construct the WHERE clause for join table queries. 
 		private function joinConditions(keyvals:*, target:*):String {			
 			if (mySource.unsaved) mySource.save();
 			if (!mySource['id']) {
@@ -306,7 +424,9 @@ package com.memamsa.airdb
 			}			
 			var conditions:String = " WHERE ";
 			conditions += '(' + sourceForeignKey + " = " + mySource['id'] + ')';
-			if (keyvals is Object) {
+			if (keyvals is String) {
+				conditions += ' AND (' + keyvals + ')';
+			} else if (keyvals is Object) {
 				var cond:Array = [];
 				for (var key:String in keyvals) {
 					cond.push('(' + key + " = " + DB.sqlMap(keyvals[key]) + ')');
@@ -314,8 +434,6 @@ package com.memamsa.airdb
 				if (cond.length > 0) {
 					conditions += ' AND ' + cond.join(' AND ');
 				}
-			} else if (keyvals is String) {
-				conditions += ' AND ' + keyvals;
 			}
 			if (target && target is Modeler) target = target.id;
 			if (target && target is Number && target != Associator.ALL) {
