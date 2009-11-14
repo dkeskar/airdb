@@ -21,8 +21,8 @@ package example
         },
         // Here is how you add a new migration directive as an element of the array 
         function(my:Migrator):void {
-					my.joinTable(Comment);
-				}
+		  my.joinTable(Comment);
+		}
       ]);
       // other class methods and properties
   }

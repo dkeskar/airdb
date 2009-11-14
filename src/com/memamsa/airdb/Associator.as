@@ -266,7 +266,7 @@ package com.memamsa.airdb
 		* @example A blog Post has many Tags and a Tag is associated with many Post
 		* A logged in reader (User) can vote on the tagggings for the post. We can
 		* track the vote counts for each tagging
-		* 
+		* <listing version="3.0"> 
 		* [Association type="has_and_belongs_to_many" name="tags" class="example.Tag"]
 		* dynamic public class Post extends Modeler {
 		* 		private static var migrations:Migrator = new Migrator(
@@ -298,6 +298,7 @@ package com.memamsa.airdb
 		* 
 		* // Reset the votes for all tags for a given post
 		* post.tags.setAttr({votes: 1});
+		* </listing>
 		*
 		* @param keyvals An Object whose keys map to the column names for the join
 		* table attributes. The corresponding values are used to update the fields
