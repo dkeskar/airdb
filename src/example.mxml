@@ -22,6 +22,13 @@
 				var results:Array; 
 				results = post.comments.findAll({conditions: "author like '%cool%'", order: 'created_at ASC'});
 				trace('Found: ' + results.length);
+				
+				// comment on a comment
+				// we can do self-referential has-many relationships
+				var sub:Comment = new Comment();
+				sub.create({title: 'OP is right!', author: 'fanboi'});
+				cmt.comments.push(sub);
+				trace('Thread parent: ' + sub.parent.title);
 			}
 		]]>
 	</mx:Script>
