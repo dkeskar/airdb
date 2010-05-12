@@ -65,6 +65,7 @@ package com.memamsa.airdb
 		public static const HAS_ONE:String = "has_one";
 		public static const HAS_MANY:String = "has_many";
 		public static const BELONGS_TO:String = "belongs_to";
+		public static const HAS_MANY_THROUGH:String = "has_many_through";
 		
 		public static const ALL:int = 0;
 		
@@ -77,9 +78,11 @@ package com.memamsa.airdb
 		private var myType:String;      // association type
 		private var targetKlass:Class;	// class of the target
 		private var joinTable:String;   // for has_and_belongs_to_many
+		private var joinPhrase:String;	// for has_many - through
 		private var mPropName:String;		// association name as property of source
-		private var targetForeignKey:String;    // foreign key for target model
-		private var sourceForeignKey:String;    // join table foreign key for source
+		// HACK - make source & targetForeignKey public to enable H-M-T
+		public var targetForeignKey:String;    // foreign key for target model. 
+		public var sourceForeignKey:String;    // join table foreign key for source
 		private var targetStoreName:String;     // table name for target
 		
 		/**
@@ -96,15 +99,35 @@ package com.memamsa.airdb
 		* 
 		* @param type The association type. 
 		**/
-		public function Associator(source:Modeler, target:Class, type:String) {
+		public function Associator(source:Modeler, target:Class, type:String, options:Object = null) {
 		  // store information and generated mappings
 			mySource = source;
 			targetKlass = target;
 			sourceForeignKey = DB.mapForeignKey(source);
 			targetForeignKey = DB.mapForeignKey(target);
-			targetStoreName = DB.mapTable(target);
-			
+			targetStoreName = DB.mapTable(target);			
 			myType = type;
+			
+			if (myType == HAS_MANY && options && options.through) {
+				myType = HAS_MANY_THROUGH;
+			}
+
+			if (options && options.foreign_key) {
+				if (myType == BELONGS_TO) {
+					targetForeignKey = options.foreign_key;
+				} else if (myType == HAS_MANY) {
+					sourceForeignKey = options.foreign_key;
+				} else if (myType == HAS_MANY_THROUGH) {
+					var hmAssoc:Associator = source[options.through];
+					if (!hmAssoc) {
+						throw new Error('Associator ERROR finding through association');
+					} 
+					joinTable = hmAssoc.target.storeName;
+					sourceForeignKey = hmAssoc.sourceForeignKey;
+					targetForeignKey = options.foreign_key;										
+				}
+			}
+			
 			try {
 			  if (myType == BELONGS_TO) {
 			    // Find the specific target corresponding to this source object. 
@@ -151,7 +174,7 @@ package com.memamsa.airdb
 		* </listing>
 		**/
 		public function set target(obj:*):void {
-		  if (myType == HAS_MANY || myType == HAS_AND_BELONGS_TO_MANY) {
+		  if (myType == HAS_MANY || myType == HAS_AND_BELONGS_TO_MANY || myType == HAS_MANY_THROUGH) {
 		    throw new Error(myType + ': Cannot directly set target. Use push');
 		  }		  
 		  if (!(obj is Modeler)) {
@@ -200,7 +223,7 @@ package com.memamsa.airdb
 			if (myType == HAS_ONE || myType == BELONGS_TO) {
 			  return ((typeof(myTarget) != 'undefined' && myTarget) ? 1 : 0);
 			}
-			if (myType == HAS_AND_BELONGS_TO_MANY) {
+			if (myType == HAS_AND_BELONGS_TO_MANY || myType == HAS_MANY_THROUGH) {
 				var query:Object = construct_query();
 				return myTarget.countAll(query);
 			}
@@ -246,7 +269,7 @@ package com.memamsa.airdb
 		**/
 		public function findAll(query:Object):Array {
 			if (!mySource['id']) return [];
-			if (myType == HAS_AND_BELONGS_TO_MANY) {
+			if (myType == HAS_AND_BELONGS_TO_MANY || myType == HAS_MANY_THROUGH) {
 				var query:Object = construct_query(query);
 				return myTarget.findAll(query);
 			} else if (myType == HAS_MANY) {
@@ -498,7 +521,7 @@ package com.memamsa.airdb
 			  targetId = obj;
 			}			
 			
-			if (myType == HAS_AND_BELONGS_TO_MANY) {
+			if (myType == HAS_AND_BELONGS_TO_MANY || myType == HAS_MANY_THROUGH) {
 			  return find_or_create(mySource['id'], targetId, noDups);
 			} else if (myType == HAS_MANY) {
 			  var rc:int = 0;

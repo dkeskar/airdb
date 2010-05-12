@@ -2,6 +2,8 @@
 <mx:WindowedApplication xmlns:mx="http://www.adobe.com/2006/mxml" layout="absolute" initialize="exInit();">
 	<mx:Script>
 		<![CDATA[
+			import example.Relationship;
+			import example.Person;
 			import mx.core.Application;
 			import com.memamsa.airdb.DB;
 			import example.Comment;
@@ -29,6 +31,37 @@
 				sub.create({title: 'OP is right!', author: 'fanboi'});
 				cmt.comments.push(sub);
 				trace('Thread parent: ' + sub.parent.title);
+				
+				// EXPERIMENTAL
+				// self-referential has_many using new associative declarations
+				var mario:Person = new Person();
+				if (!mario.load({name: 'Mario Spaghetti'})) {
+					mario.create({name: 'Mario Spaghetti', age: 43, city: 'Rome'});
+				}				
+				
+				var luigi:Person = new Person();
+				if (!luigi.load({name: 'Luigi Salvatore'})) {
+					luigi.create({name: 'Luigi Salvatore', age: 39, city: 'Venice'});
+				}
+				
+				var joe:Person = new Person();
+				if (!joe.load({name: 'Joe Montana'})) {
+					joe.create({name: 'Joe Montana', age: 55, city: 'New York'});
+				}
+				
+				Relationship.make(mario, luigi, 'omerta officers');
+				Relationship.make(mario, joe, 'baseball buddies');
+				
+				trace('Friends of Mario: ' + mario.friends.count);
+				
+				// describe friendships
+				var frnds:Array = mario.friendships.list();
+				trace('Iterating Mario friendships');
+				var rel:Relationship = new Relationship();
+				for each (var friend:* in frnds) {
+					rel.load({id: friend.id});
+					trace(friend.descr + ': ' + friend.to_id + ': ' + rel.receptor.name);					
+				}
 			}
 		]]>
 	</mx:Script>

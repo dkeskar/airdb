@@ -71,6 +71,9 @@ package com.memamsa.airdb
 		private var mStoreName:String = null; // our table name
 		private var stmt:SQLStatement = null;
 		
+		// Known associations
+		private var mKnownAssociations:Object = {};
+		
 		// sub-class(es) can access fieldValues directly (if they need to) 
 		protected var fieldValues:Object = new Object();
 		
@@ -94,6 +97,10 @@ package com.memamsa.airdb
 				fieldValues[fname] = null;
 			}
 			fieldValues['_rowid'] = null;
+			
+			// get known associations 
+			mKnownAssociations = model.prototype.knownAssociations;
+			
 			// set this to be a newly initialized object. 
 			// this allows new ModelClass() to be used for creating new record
 			recNew = true;
@@ -666,12 +673,16 @@ package com.memamsa.airdb
 		override flash_proxy function hasProperty(name:*):Boolean {
 			var hasProperty:Boolean = fieldValues.hasOwnProperty(name);
 			if (!hasProperty) {
+				if (mKnownAssociations.hasOwnProperty(name)) {
+					hasProperty = true;
+				}
+			}
+			if (!hasProperty) {
 				var associator:Associator = findAssociation(name);
 				if (associator) {
 					hasProperty = true;
 				}
 			}
-
 			return hasProperty;
 		} 
 		
@@ -694,6 +705,16 @@ package com.memamsa.airdb
 			  // if we have previously cached the Associator object corresponding 
 			  // to this property, return the cached object
 				return associations[name];
+			}
+			if (mKnownAssociations && mKnownAssociations.hasOwnProperty(name)) {
+				var info:Object = mKnownAssociations[name];
+				var ka:Associator = undefined;
+				if (info) {
+					var clsName:String = info.options.class_name;
+					var klass:Class = flash.utils.getDefinitionByName(clsName) as Class;
+					associations[name] = new Associator(this, klass, info.type, info.options);
+					return associations[name];
+				}
 			}
 			
 			// look through the association meta-data to see if we support this
