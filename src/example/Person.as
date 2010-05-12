@@ -24,6 +24,11 @@ package example
 					class_name: 'example.Relationship'});
 				me.hasMany('friends', {through: 'friendships', foreign_key: 'to_id', 
 					class_name: 'example.Person'});
+				
+				me.hasMany('acquaintances', {foreign_key: 'to_id', 
+					class_name: 'example.Relationship'});
+				me.hasMany('contacts', {through: 'acquaintances', foreign_key: 'from_id', 
+					class_name: 'example.Person'});
 			});
 		
 	}
